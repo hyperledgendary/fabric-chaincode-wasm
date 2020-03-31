@@ -1,3 +1,6 @@
+// Copyright the Hyperledger Fabric contributors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package wasmruntime
 
 import (
@@ -255,14 +258,16 @@ func NewRuntime(wasmBytes []byte) *WasmPcRuntime {
 	return &wr
 }
 
-func (s *WasmPcRuntime) Init(APIstub shim.ChaincodeStubInterface) sc.Response {
+// Init is called for chaincode initialization
+func (wr *WasmPcRuntime) Init(APIstub shim.ChaincodeStubInterface) sc.Response {
 	return shim.Success(nil)
 }
 
-func (s *WasmPcRuntime) Invoke(APIstub shim.ChaincodeStubInterface) sc.Response {
+// Invoke is called for chaindcode innvocations. t is called for chaincode initialization
+func (wr *WasmPcRuntime) Invoke(APIstub shim.ChaincodeStubInterface) sc.Response {
 	function, args := APIstub.GetFunctionAndParameters()
 	txid := APIstub.GetTxID()
 	channelid := APIstub.GetChannelID()
-	s.Call(function, args, txid, channelid)
+	wr.Call(function, args, txid, channelid)
 	return shim.Success(nil)
 }
