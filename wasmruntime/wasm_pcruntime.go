@@ -7,13 +7,9 @@ import (
 	"fmt"
 	"log"
 
-	datatypes "wcr/datatypes"
-
 	"github.com/golang/protobuf/proto"
+	"github.com/hyperledgendary/fabric-chaincode-wasm/datatypes"
 	"github.com/perlin-network/life/exec"
-
-	"github.com/hyperledger/fabric-chaincode-go/shim"
-	sc "github.com/hyperledger/fabric-protos-go/peer"
 )
 
 // WasmPcRuntime is an abstraction of the instance of the Wasm engine
@@ -119,6 +115,8 @@ func (r *Resolver) ResolveFunc(module, field string) exec.FunctionImport {
 				log.Printf("mm %x %x %s", ptr, len, m)
 				// make the actual call to the function
 				// will pretend by setting the result with a string
+
+				// TODO: need to set the callback functions here
 				wr.callctx.hostCallResult = []byte("Hello from Go")
 				return 1 // SUCCESS
 			}
@@ -235,6 +233,7 @@ func NewRuntime(wasmBytes []byte) *WasmPcRuntime {
 
 	resolver := Resolver{runtime: &wr}
 	log.Printf("[host] New Wasm VM")
+
 	// Instantiate a new WebAssembly VM with a few resolved imports.
 	vm, err := exec.NewVirtualMachine(wasmBytes, exec.VMConfig{
 		DefaultMemoryPages:   128,
@@ -256,18 +255,4 @@ func NewRuntime(wasmBytes []byte) *WasmPcRuntime {
 	wr.guestCall = entryID
 
 	return &wr
-}
-
-// Init is called for chaincode initialization
-func (wr *WasmPcRuntime) Init(APIstub shim.ChaincodeStubInterface) sc.Response {
-	return shim.Success(nil)
-}
-
-// Invoke is called for chaindcode innvocations. t is called for chaincode initialization
-func (wr *WasmPcRuntime) Invoke(APIstub shim.ChaincodeStubInterface) sc.Response {
-	function, args := APIstub.GetFunctionAndParameters()
-	txid := APIstub.GetTxID()
-	channelid := APIstub.GetChannelID()
-	wr.Call(function, args, txid, channelid)
-	return shim.Success(nil)
 }
