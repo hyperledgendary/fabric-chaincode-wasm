@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"wcr/wasmruntime"
+	"github.com/hyperledgendary/fabric-chaincode-wasm/wasmruntime"
 
 	"github.com/hyperledger/fabric-chaincode-go/shim"
 	"github.com/markbates/pkger"

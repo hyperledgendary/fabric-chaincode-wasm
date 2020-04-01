@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"log"
 
-	datatypes "wcr/datatypes"
+	datatypes "github.com/hyperledgendary/fabric-chaincode-wasm/datatypes"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/perlin-network/life/exec"

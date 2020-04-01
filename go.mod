@@ -1,4 +1,4 @@
-module wcr
+module github.com/hyperledgendary/fabric-chaincode-wasm
 
 go 1.14
 
