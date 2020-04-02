@@ -4,14 +4,20 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 	"log"
-	"github.com/hyperledgendary/fabric-chaincode-wasm/wasmruntime"
+	"os"
 
+	"github.com/hyperledgendary/fabric-chaincode-wasm/wasmruntime"
 	"github.com/hyperledger/fabric-chaincode-go/shim"
-	"github.com/markbates/pkger"
 )
+
+// ChaincodeConfig is used to configure the chaincode server. See chaincode.env.example
+type ChaincodeConfig struct {
+	CCID    string
+	Address string
+	WasmCC  string
+}
 
 func check(e error) {
 	if e != nil {
@@ -22,24 +28,27 @@ func check(e error) {
 func main() {
 	log.Printf("[host] Wasm Contract runtime..")
 
-	info, err := pkger.Stat("/contracts/fabric_contract.wasm")
-	check(err)
+	config := ChaincodeConfig{
+		CCID:    os.Getenv("CHAINCODE_ID"),
+		Address: os.Getenv("CHAINCODE_SERVER_ADDRESS"),
+		WasmCC:  os.Getenv("CHAINCODE_WASM_FILE"),
+	}
 
-	fmt.Println("Name: ", info.Name())
-	fmt.Println("Size: ", info.Size())
-	fmt.Println("Mode: ", info.Mode())
-	fmt.Println("ModTime: ", info.ModTime())
-
-	f, err := pkger.Open("/contracts/fabric_contract.wasm")
-	check(err)
-	defer f.Close()
-
-	wasmBytes, err := ioutil.ReadAll(f)
+	wasmBytes, err := ioutil.ReadFile(config.WasmCC)
 	check(err)
 
 	wrt := wasmruntime.NewRuntime(wasmBytes)
 
-	err = shim.Start(wrt)
+	server := &shim.ChaincodeServer{
+		CCID:    config.CCID,
+		Address: config.Address,
+		CC:      wrt,
+		TLSProps: shim.TLSProperties{
+			Disabled: true,
+		},
+	}
+
+	err = server.Start()
 	check(err)
 
 	return
