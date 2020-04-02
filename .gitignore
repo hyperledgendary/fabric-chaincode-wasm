@@ -1,3 +1,8 @@
+chaincode.env
+connection.json
+*.tar.gz
+*.tgz
+
 # Binaries for programs and plugins
 *.exe
 *.exe~
