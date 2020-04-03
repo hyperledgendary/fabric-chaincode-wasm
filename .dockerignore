@@ -1,0 +1,8 @@
+chaincode.env*
+
+*.wasm
+
+*.json
+*.md
+*.tar.gz
+*.tgz
