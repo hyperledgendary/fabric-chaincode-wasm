@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 ARG GO_VER=1.13.8
-ARG ALPINE_VER=3.10
 
-FROM golang:${GO_VER}-alpine${ALPINE_VER}
+# Alpine image doesn't work for wasmer :(
+FROM golang:${GO_VER}
 
 WORKDIR /go/src/github.com/hyperledgendary/fabric-chaincode-wasm
 COPY . .

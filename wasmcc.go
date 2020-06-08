@@ -4,12 +4,15 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 
 	"github.com/hyperledgendary/fabric-chaincode-wasm/wasmruntime"
 	"github.com/hyperledger/fabric-chaincode-go/shim"
+	"github.com/wapc/wapc-go"
 )
 
 // ChaincodeConfig is used to configure the chaincode server. See chaincode.env.example
@@ -27,6 +30,7 @@ func check(e error) {
 
 func main() {
 	log.Printf("[host] Wasm Contract runtime..")
+	ctx := context.Background()
 
 	config := ChaincodeConfig{
 		CCID:    os.Getenv("CHAINCODE_ID"),
@@ -37,7 +41,26 @@ func main() {
 	wasmBytes, err := ioutil.ReadFile(config.WasmCC)
 	check(err)
 
-	wrt := wasmruntime.NewRuntime(wasmBytes)
+	module, err := wapc.New(consoleLog, wasmBytes, hostCall)
+	if err != nil {
+		panic(err)
+	}
+	defer module.Close()
+
+	instance, err := module.Instantiate()
+	if err != nil {
+		panic(err)
+	}
+	defer instance.Close()
+
+	// result, err := instance.Invoke(ctx, "hello", []byte(name))
+	// if err != nil {
+	// 	panic(err)
+	// }
+
+	// fmt.Println(string(result))
+
+	wrt := wasmruntime.NewRuntime(ctx, *instance)
 
 	server := &shim.ChaincodeServer{
 		CCID:    config.CCID,
@@ -52,4 +75,26 @@ func main() {
 	check(err)
 
 	return
+}
+
+func consoleLog(msg string) {
+	fmt.Println(msg)
+}
+
+func hostCall(ctx context.Context, binding, namespace, operation string, payload []byte) ([]byte, error) {
+	// Route the payload to any custom functionality accordingly.
+	// You can even route to other waPC modules!!!
+	log.Printf("bd %s ns %s op %s payload length %d\n", binding, namespace, operation, len(payload))
+
+	// Todo add default cases?
+	switch namespace {
+	case "LedgerService":
+		switch operation {
+		case "CreateState":
+			return []byte("CreateState ftw!"), nil
+		case "ReadState":
+			return []byte("ReadState ftw!"), nil
+		}
+	}
+	return []byte("Hello from Go"), nil
 }
