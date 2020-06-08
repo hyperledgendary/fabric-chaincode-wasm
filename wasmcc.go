@@ -10,6 +10,11 @@ import (
 	"log"
 	"os"
 
+	contract "github.com/hyperledgendary/fabric-ledger-protos-go/contract"
+
+	"github.com/golang/protobuf/proto"
+
+	"github.com/hyperledgendary/fabric-chaincode-wasm/internal"
 	"github.com/hyperledgendary/fabric-chaincode-wasm/wasmruntime"
 	"github.com/hyperledger/fabric-chaincode-go/shim"
 	"github.com/wapc/wapc-go"
@@ -22,6 +27,7 @@ type ChaincodeConfig struct {
 	WasmCC  string
 }
 
+// TODO don't panic!
 func check(e error) {
 	if e != nil {
 		panic(e)
@@ -91,9 +97,25 @@ func hostCall(ctx context.Context, binding, namespace, operation string, payload
 	case "LedgerService":
 		switch operation {
 		case "CreateState":
-			return []byte("CreateState ftw!"), nil
+			log.Printf("Processing CreateStateRequest...\n")
+			request := &contract.CreateStateRequest{}
+			err := proto.Unmarshal(payload, request)
+			if err != nil {
+				return nil, err
+			}
+
+			log.Printf("CreateState...\n")
+			return internal.CreateState(request)
 		case "ReadState":
-			return []byte("ReadState ftw!"), nil
+			log.Printf("Processing ReadStateRequest...\n")
+			request := &contract.ReadStateRequest{}
+			err := proto.Unmarshal(payload, request)
+			if err != nil {
+				return nil, err
+			}
+
+			log.Printf("ReadState...\n")
+			return internal.ReadState(request)
 		}
 	}
 	return []byte("Hello from Go"), nil
