@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/hyperledgendary/fabric-chaincode-wasm/internal"
 	contract "github.com/hyperledgendary/fabric-ledger-protos-go/contract"
 
 	"github.com/golang/protobuf/proto"
@@ -24,23 +25,22 @@ type WasmPcRuntime struct {
 	wapcInstance wapc.Instance
 }
 
-func check(e error) {
-	if e != nil {
-		panic(e)
-	}
-}
-
 // CallContract makes the requried tx call on the wasm contract
-func (wr *WasmPcRuntime) CallContract(fnname string, args [][]byte, txid string, channelid string) {
+func (wr *WasmPcRuntime) CallContract(fnname string, args [][]byte, txid string, channelid string) ([]byte, error) {
 
+	context := &contract.TransactionContext{
+		ChannelId:     channelid,
+		TransactionId: txid,
+	}
 	msg := &contract.InvokeTransactionRequest{
-		ChannelId:       channelid,
-		TransactionId:   txid,
+		Context:         context,
 		TransactionName: fnname,
 		Args:            args}
 
 	argsBuffer, err := proto.Marshal(msg)
-	check(err)
+	if err != nil {
+		return nil, err
+	}
 
 	log.Printf("[host] calling %s txid=%s", fnname, txid)
 	// result, err := wr.vm.Run(entryID, int64(len(fnBuffer)), int64(len(argsBuffer)))
@@ -48,10 +48,11 @@ func (wr *WasmPcRuntime) CallContract(fnname string, args [][]byte, txid string,
 
 	result, err := wr.wapcInstance.Invoke(wr.ctx, "InvokeTransaction", []byte(argsBuffer))
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	fmt.Println(string(result))
+	return result, nil
 }
 
 // NewRuntime Get the runtime
@@ -70,6 +71,9 @@ func (wr *WasmPcRuntime) Init(APIstub shim.ChaincodeStubInterface) sc.Response {
 
 // Invoke is called for chaindcode innvocations. t is called for chaincode initialization
 func (wr *WasmPcRuntime) Invoke(APIstub shim.ChaincodeStubInterface) sc.Response {
+	stash := internal.GetStash()
+	stash.SetStub(APIstub)
+
 	function, args := APIstub.GetFunctionAndParameters()
 	txid := APIstub.GetTxID()
 	channelid := APIstub.GetChannelID()
@@ -79,6 +83,10 @@ func (wr *WasmPcRuntime) Invoke(APIstub shim.ChaincodeStubInterface) sc.Response
 		bargs[i] = []byte(a)
 	}
 
-	wr.CallContract(function, bargs, txid, channelid)
-	return shim.Success(nil)
+	result, err := wr.CallContract(function, bargs, txid, channelid)
+	if err != nil {
+		return shim.Error(err.Error())
+	}
+
+	return shim.Success(result)
 }
