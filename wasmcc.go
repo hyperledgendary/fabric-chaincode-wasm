@@ -116,6 +116,16 @@ func hostCall(ctx context.Context, binding, namespace, operation string, payload
 
 			log.Printf("ReadState...\n")
 			return internal.ReadState(request)
+		case "ExistsState":
+			log.Printf("Processing ExistsStateRequest...\n")
+			request := &contract.ExistsStateRequest{}
+			err := proto.Unmarshal(payload, request)
+			if err != nil {
+				return nil, err
+			}
+
+			log.Printf("ExistsState...\n")
+			return internal.ExistsState(request)
 		}
 	}
 	return []byte("Hello from Go"), nil
