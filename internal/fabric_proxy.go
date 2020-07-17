@@ -4,42 +4,96 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"log"
 
-	"github.com/golang/protobuf/proto"
 	contract "github.com/hyperledgendary/fabric-ledger-protos-go/contract"
+	"google.golang.org/protobuf/proto"
 )
 
-// CreateState is great
-func CreateState(request *contract.CreateStateRequest) ([]byte, error) {
+// FabricProxy routes calls from Wasm contract to the correct Fabric stub
+type FabricProxy struct {
+	contextStore *ContextStore
+}
+
+// NewFabricProxy returns a new proxy to handle calls to the Fabric contract API
+func NewFabricProxy(contextStore *ContextStore) *FabricProxy {
+	proxy := FabricProxy{}
+	proxy.contextStore = contextStore
+
+	return &proxy
+}
+
+// FabricCall is the waPC HostCall function for interacting with the ledger
+func (proxy *FabricProxy) FabricCall(ctx context.Context, binding, namespace, operation string, payload []byte) ([]byte, error) {
+	// Route the payload to any custom functionality accordingly.
+	// You can even route to other waPC modules!!!
+	log.Printf("[host] bd %s ns %s op %s payload length %d\n", binding, namespace, operation, len(payload))
+
+	switch namespace {
+	case "LedgerService":
+		switch operation {
+		case "CreateState":
+			log.Printf("[host] Processing CreateStateRequest...\n")
+			request := &contract.CreateStateRequest{}
+			err := proto.Unmarshal(payload, request)
+			if err != nil {
+				return nil, err
+			}
+
+			return proxy.createState(request)
+		case "ReadState":
+			log.Printf("[host] Processing ReadStateRequest...\n")
+			request := &contract.ReadStateRequest{}
+			err := proto.Unmarshal(payload, request)
+			if err != nil {
+				return nil, err
+			}
+
+			return proxy.readState(request)
+		case "ExistsState":
+			log.Printf("[host] Processing ExistsStateRequest...\n")
+			request := &contract.ExistsStateRequest{}
+			err := proto.Unmarshal(payload, request)
+			if err != nil {
+				return nil, err
+			}
+
+			return proxy.existsState(request)
+		}
+	}
+
+	return nil, fmt.Errorf("Operation not supported: %s %s", namespace, operation)
+}
+
+func (proxy *FabricProxy) createState(request *contract.CreateStateRequest) ([]byte, error) {
 	context := request.Context
 	state := request.State
-	log.Printf("CreateState txid %s chid %s key %s value length %d\n", context.TransactionId, context.ChannelId, state.Key, len(state.Value))
-	// stub := &shim.ChaincodeStub{
-	// 	TxID:      context.TransactionId,
-	// 	ChannelID: context.ChannelId,
-	// }
-	stash := GetStash()
-	stub := stash.GetStub()
+	log.Printf("[host] CreateState txid %s chid %s key %s value length %d\n", context.TransactionId, context.ChannelId, state.Key, len(state.Value))
 
-	err := stub.PutState(state.Key, state.Value)
+	stub, err := proxy.contextStore.Get(context)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to write to world state. %s", err.Error())
+	}
 
-	log.Printf("CreateState done")
+	err = stub.PutState(state.Key, state.Value)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to write to world state. %s", err.Error())
+	}
+
+	log.Printf("[host] CreateState done")
 	return nil, err
 }
 
-// ReadState is great
-func ReadState(request *contract.ReadStateRequest) ([]byte, error) {
+func (proxy *FabricProxy) readState(request *contract.ReadStateRequest) ([]byte, error) {
 	context := request.Context
-	log.Printf("ReadState txid %s chid %s key %s\n", context.TransactionId, context.ChannelId, request.StateKey)
+	log.Printf("[host] ReadState txid %s chid %s key %s\n", context.TransactionId, context.ChannelId, request.StateKey)
 
-	// stub := &shim.ChaincodeStub{
-	// 	TxID:      context.TransactionId,
-	// 	ChannelID: context.ChannelId,
-	// }
-	stash := GetStash()
-	stub := stash.GetStub()
+	stub, err := proxy.contextStore.Get(context)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read from world state. %s", err.Error())
+	}
 
 	response := &contract.ReadStateResponse{}
 	state := &contract.State{}
@@ -53,21 +107,18 @@ func ReadState(request *contract.ReadStateRequest) ([]byte, error) {
 	state.Value = stateBytes
 	response.State = state
 
-	log.Printf("Read State done")
+	log.Printf("[host] Read State done")
 	return proto.Marshal(response)
 }
 
-// ExistsState is great
-func ExistsState(request *contract.ExistsStateRequest) ([]byte, error) {
+func (proxy *FabricProxy) existsState(request *contract.ExistsStateRequest) ([]byte, error) {
 	context := request.Context
-	log.Printf("ExistsState txid %s chid %s key %s\n", context.TransactionId, context.ChannelId, request.StateKey)
+	log.Printf("[host] ExistsState txid %s chid %s key %s\n", context.TransactionId, context.ChannelId, request.StateKey)
 
-	// stub := &shim.ChaincodeStub{
-	// 	TxID:      context.TransactionId,
-	// 	ChannelID: context.ChannelId,
-	// }
-	stash := GetStash()
-	stub := stash.GetStub()
+	stub, err := proxy.contextStore.Get(context)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read from world state. %s", err.Error())
+	}
 
 	stateBytes, err := stub.GetState(request.StateKey)
 	if err != nil {
@@ -82,5 +133,6 @@ func ExistsState(request *contract.ExistsStateRequest) ([]byte, error) {
 		response.Exists = true
 	}
 
+	log.Printf("[host] Exists State done")
 	return proto.Marshal(response)
 }
