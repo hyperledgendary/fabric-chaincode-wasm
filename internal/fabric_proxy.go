@@ -61,6 +61,15 @@ func (proxy *FabricProxy) FabricCall(ctx context.Context, binding, namespace, op
 			}
 
 			return proxy.existsState(request)
+		case "UpdateState":
+			log.Printf("[host] Processing UpdateStateRequest...\n")
+			request := &contract.UpdateStateRequest{}
+			err := proto.Unmarshal(payload, request)
+			if err != nil {
+				return nil, err
+			}
+
+			return proxy.updateState(request)
 		}
 	}
 
@@ -83,6 +92,25 @@ func (proxy *FabricProxy) createState(request *contract.CreateStateRequest) ([]b
 	}
 
 	log.Printf("[host] CreateState done")
+	return nil, err
+}
+
+func (proxy *FabricProxy) updateState(request *contract.UpdateStateRequest) ([]byte, error) {
+	context := request.Context
+	state := request.State
+	log.Printf("[host] UpdateState txid %s chid %s key %s value length %d\n", context.TransactionId, context.ChannelId, state.Key, len(state.Value))
+
+	stub, err := proxy.contextStore.Get(context)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to write to world state. %s", err.Error())
+	}
+
+	err = stub.PutState(state.Key, state.Value)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to write to world state. %s", err.Error())
+	}
+
+	log.Printf("[host] UpdateState done")
 	return nil, err
 }
 
