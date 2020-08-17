@@ -49,13 +49,16 @@ func newChaincodePool(wasmFile string, proxy *internal.FabricProxy) (*wapc.Pool,
 }
 
 func main() {
-	log.Printf("[host] Wasm Chaincode server...")
+	log.Printf("[host] Wasm Chaincode client-server...\n")
 
 	config := ChaincodeConfig{
 		CCID:    os.Getenv("CHAINCODE_ID"),
 		Address: os.Getenv("CHAINCODE_SERVER_ADDRESS"),
 		WasmCC:  os.Getenv("CHAINCODE_WASM_FILE"),
 	}
+	log.Printf("[host] CCID: %s\n", config.CCID)
+	log.Printf("[host] Address: %s\n", config.Address)
+	log.Printf("[host] WasmCC: %s\n", config.WasmCC)
 
 	contextStore := internal.NewContextStore()
 	proxy := internal.NewFabricProxy(contextStore)
@@ -67,16 +70,26 @@ func main() {
 
 	contract := internal.NewWasmContract(contextStore, wapcPool)
 
-	server := &shim.ChaincodeServer{
-		CCID:    config.CCID,
-		Address: config.Address,
-		CC:      contract,
-		TLSProps: shim.TLSProperties{
-			Disabled: true,
-		},
+	if len(config.Address) > 0 {
+		log.Printf("[host] Wasm Chaincode server starting...\n")
+		server := &shim.ChaincodeServer{
+			CCID:    config.CCID,
+			Address: config.Address,
+			CC:      contract,
+			TLSProps: shim.TLSProperties{
+				Disabled: true,
+			},
+		}
+
+		if err := server.Start(); err != nil {
+			fmt.Printf("Error starting Wasm chaincode server: %s", err.Error())
+		}
+	} else {
+		log.Printf("[host] Wasm Chaincode starting...\n")
+		if err := shim.Start(contract); err != nil {
+			fmt.Printf("Error starting Wasm chaincode: %s", err.Error())
+		}
 	}
 
-	if err := server.Start(); err != nil {
-		fmt.Printf("Error starting Wasm chaincode server: %s", err.Error())
-	}
+	log.Printf("[host] Wasm Chaincode done\n")
 }
