@@ -33,8 +33,8 @@ steps:
       license-check-and-add check -f .azure-pipelines/resources/license-config.json
     displayName: Check licenses
 
-  # - script: go test -race ./... -v
-  #   displayName: Run tests
+  - script: go test -race ./... -v
+    displayName: Run tests
 
   # - script: cd internal/functionaltests && godog
   #   displayName: Run functional tests
