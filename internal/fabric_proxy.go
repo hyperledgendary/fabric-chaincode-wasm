@@ -31,8 +31,7 @@ func (proxy *FabricProxy) FabricCall(ctx context.Context, binding, namespace, op
 	// You can even route to other waPC modules!!!
 	log.Printf("[host] bd %s ns %s op %s payload length %d\n", binding, namespace, operation, len(payload))
 
-	switch namespace {
-	case "LedgerService":
+	if binding == "wasm" && namespace == "LedgerService" {
 		switch operation {
 		case "CreateState":
 			log.Printf("[host] Processing CreateStateRequest...\n")
@@ -73,7 +72,7 @@ func (proxy *FabricProxy) FabricCall(ctx context.Context, binding, namespace, op
 		}
 	}
 
-	return nil, fmt.Errorf("Operation not supported: %s %s", namespace, operation)
+	return nil, fmt.Errorf("Operation not supported: %s %s %s", binding, namespace, operation)
 }
 
 func (proxy *FabricProxy) createState(request *contract.CreateStateRequest) ([]byte, error) {
