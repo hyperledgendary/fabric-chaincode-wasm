@@ -10,6 +10,9 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/hyperledgendary/fabric-chaincode-wasm/internal"
+	"github.com/hyperledgendary/fabric-chaincode-wasm/internal/fakes"
+	contract "github.com/hyperledgendary/fabric-ledger-protos-go/contract"
+	"google.golang.org/protobuf/proto"
 )
 
 var _ = Describe("FabricProxy", func() {
@@ -28,22 +31,77 @@ var _ = Describe("FabricProxy", func() {
 	Describe("FabricCall", func() {
 
 		Context("With an invalid request", func() {
-			It("should error if the binding is not wasm", func() {
-				result, err := proxy.FabricCall(ctx, "notWasm", "LedgerService", "CreateState", []byte(""))
+			It("should error if the binding is not wapc", func() {
+				result, err := proxy.FabricCall(ctx, "notWapc", "LedgerService", "CreateState", []byte(""))
 				Expect(result).To(BeNil())
-				Expect(err).To(MatchError("Operation not supported: notWasm LedgerService CreateState"))
+				Expect(err).To(MatchError("Operation not supported: notWapc LedgerService CreateState"))
 			})
 
 			It("should error if the namespace is not LedgerService", func() {
-				result, err := proxy.FabricCall(ctx, "wasm", "TeaService", "CreateState", []byte(""))
+				result, err := proxy.FabricCall(ctx, "wapc", "TeaService", "CreateState", []byte(""))
 				Expect(result).To(BeNil())
-				Expect(err).To(MatchError("Operation not supported: wasm TeaService CreateState"))
+				Expect(err).To(MatchError("Operation not supported: wapc TeaService CreateState"))
 			})
 
 			It("should error with an unsupported operation", func() {
-				result, err := proxy.FabricCall(ctx, "wasm", "LedgerService", "MutateState", []byte(""))
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "MutateState", []byte(""))
 				Expect(result).To(BeNil())
-				Expect(err).To(MatchError("Operation not supported: wasm LedgerService MutateState"))
+				Expect(err).To(MatchError("Operation not supported: wapc LedgerService MutateState"))
+			})
+		})
+
+		Context("With a CreateState request", func() {
+			var payload []byte
+
+			BeforeEach(func() {
+				context := &contract.TransactionContext{}
+				context.ChannelId = "channel1"
+				context.TransactionId = "txn1"
+				state := &contract.State{}
+				state.Key = "007"
+				state.Value = []byte("bond")
+				request := &contract.CreateStateRequest{}
+				request.Context = context
+				request.State = state
+				payload, _ = proto.Marshal(request)
+			})
+
+			It("should handle missing context error", func() {
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "CreateState", payload)
+				Expect(result).To(BeNil())
+				Expect(err).To(MatchError("CreateState failed: No stub found for transaction context channel1 txn1"))
+			})
+
+			It("should create a new state if it does not already exist", func() {
+				stub := &fakes.ChaincodeStubInterface{}
+				contextStore.Put("channel1", "txn1", stub)
+
+				Expect(proxy.FabricCall(ctx, "wapc", "LedgerService", "CreateState", payload)).To(BeNil())
+
+				Expect(stub.GetStateCallCount()).To(Equal(1), "Should call GetState once")
+				key := stub.GetStateArgsForCall(0)
+				Expect(key).To(Equal("007"), "Should call GetState with correct key")
+
+				Expect(stub.PutStateCallCount()).To(Equal(1), "Should call PutState once")
+				key, value := stub.PutStateArgsForCall(0)
+				Expect(key).To(Equal("007"), "Should call PutState with correct key")
+				Expect(value).To(Equal([]byte("bond")), "Should call PutState with correct value")
+			})
+
+			It("should fail if the state already exists", func() {
+				stub := &fakes.ChaincodeStubInterface{}
+				stub.GetStateReturns([]byte("dr evil"), nil)
+				contextStore.Put("channel1", "txn1", stub)
+
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "CreateState", payload)
+				Expect(result).To(BeNil())
+				Expect(err).To(MatchError("CreateState failed: State already exists for key 007"))
+
+				Expect(stub.GetStateCallCount()).To(Equal(1), "Should call GetState once")
+				key := stub.GetStateArgsForCall(0)
+				Expect(key).To(Equal("007"), "Should call GetState with correct key")
+
+				Expect(stub.PutStateCallCount()).To(Equal(0))
 			})
 		})
 	})

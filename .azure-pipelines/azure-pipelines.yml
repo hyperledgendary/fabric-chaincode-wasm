@@ -26,6 +26,9 @@ steps:
     clean: true
     fetchDepth: 1
 
+  - script: go generate ./...
+    displayName: Generate
+
   - script: .azure-pipelines/scripts/lint.sh
     displayName: Vet and lint
 

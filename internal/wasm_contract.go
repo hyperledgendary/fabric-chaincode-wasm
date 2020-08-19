@@ -50,12 +50,12 @@ func (wc *WasmContract) callTransaction(APIstub shim.ChaincodeStubInterface) ([]
 	txID := APIstub.GetTxID()
 	channelID := APIstub.GetChannelID()
 
-	err := wc.contextStore.Put(txID, channelID, APIstub)
+	err := wc.contextStore.Put(channelID, txID, APIstub)
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
-		err := wc.contextStore.Remove(txID, channelID)
+		err := wc.contextStore.Remove(channelID, txID)
 		if err != nil {
 			log.Println(err)
 		}
@@ -63,7 +63,7 @@ func (wc *WasmContract) callTransaction(APIstub shim.ChaincodeStubInterface) ([]
 
 	function, params := APIstub.GetFunctionAndParameters()
 
-	log.Printf("[host] calling %s channelid=%s txid=%s", function, channelID, txID)
+	log.Printf("[host] calling %s channelID=%s txID=%s", function, channelID, txID)
 
 	args, err := createInvokeTransactionArgs(channelID, txID, function, params)
 	if err != nil {
@@ -92,15 +92,15 @@ func (wc *WasmContract) callTransaction(APIstub shim.ChaincodeStubInterface) ([]
 	return result, nil
 }
 
-func createInvokeTransactionArgs(channelid string, txid string, fnname string, params []string) ([]byte, error) {
+func createInvokeTransactionArgs(channelID string, txID string, fnname string, params []string) ([]byte, error) {
 	args := make([][]byte, len(params))
 	for i, p := range params {
 		args[i] = []byte(p)
 	}
 
 	context := &contract.TransactionContext{
-		ChannelId:     channelid,
-		TransactionId: txid,
+		ChannelId:     channelID,
+		TransactionId: txID,
 	}
 	msg := &contract.InvokeTransactionRequest{
 		Context:         context,

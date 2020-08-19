@@ -31,7 +31,7 @@ func (proxy *FabricProxy) FabricCall(ctx context.Context, binding, namespace, op
 	// You can even route to other waPC modules!!!
 	log.Printf("[host] bd %s ns %s op %s payload length %d\n", binding, namespace, operation, len(payload))
 
-	if binding == "wasm" && namespace == "LedgerService" {
+	if binding == "wapc" && namespace == "LedgerService" {
 		switch operation {
 		case "CreateState":
 			log.Printf("[host] Processing CreateStateRequest...\n")
@@ -82,12 +82,21 @@ func (proxy *FabricProxy) createState(request *contract.CreateStateRequest) ([]b
 
 	stub, err := proxy.contextStore.Get(context)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to write to world state. %s", err.Error())
+		return nil, fmt.Errorf("CreateState failed: %s", err.Error())
+	}
+
+	stateBytes, err := stub.GetState(state.Key)
+	if err != nil {
+		return nil, fmt.Errorf("CreateState failed: %s", err.Error())
+	}
+
+	if stateBytes != nil {
+		return nil, fmt.Errorf("CreateState failed: State already exists for key %s", state.Key)
 	}
 
 	err = stub.PutState(state.Key, state.Value)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to write to world state. %s", err.Error())
+		return nil, fmt.Errorf("CreateState failed: %s", err.Error())
 	}
 
 	log.Printf("[host] CreateState done")
