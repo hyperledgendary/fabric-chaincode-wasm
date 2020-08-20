@@ -13,7 +13,7 @@ import (
 )
 
 type stubKey struct {
-	txID, channelID string
+	channelID, txID string
 }
 
 // ContextStore keeps track of which stub belongs to which channel ID + transaction ID context
