@@ -50,6 +50,8 @@ github.com/hyperledgendary/fabric-ledger-protos-go v0.0.0-20200608160453-d7e08f7
 github.com/hyperledgendary/fabric-ledger-protos-go v0.0.0-20200608160453-d7e08f7e13fd/go.mod h1:3MteVseJ5wQ8qSBNZRKmAF3DM8+xGRUXtoXeLpUX368=
 github.com/hyperledgendary/fabric-ledger-protos-go v0.4.0 h1:9rdQFNQa5vZMdhdDSfzKTYcQFGhigTicMvSdSkAxR2U=
 github.com/hyperledgendary/fabric-ledger-protos-go v0.4.0/go.mod h1:3MteVseJ5wQ8qSBNZRKmAF3DM8+xGRUXtoXeLpUX368=
+github.com/hyperledgendary/fabric-ledger-protos-go v0.5.0 h1:2He0ch2NsqO2uts0Fc8/fLyajAyG/IYmOc+Kl9PbWRo=
+github.com/hyperledgendary/fabric-ledger-protos-go v0.5.0/go.mod h1:3MteVseJ5wQ8qSBNZRKmAF3DM8+xGRUXtoXeLpUX368=
 github.com/hyperledger/fabric v1.4.7 h1:weX0z8WybFIj2TTF0QOa+vBxwxBRZToRms3E1wtfRZk=
 github.com/hyperledger/fabric v2.1.1+incompatible h1:cYYRv3vVg4kA6DmrixLxwn1nwBEUuYda8DsMwlaMKbY=
 github.com/hyperledger/fabric-chaincode-go v0.0.0-20200128192331-2d899240a7ed h1:VNnrD/ilIUO9DDHQP/uioYSy1309rYy0Z1jf3GLNRIc=
