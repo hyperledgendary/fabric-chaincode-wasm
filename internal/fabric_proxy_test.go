@@ -6,6 +6,7 @@ package internal_test
 import (
 	"context"
 
+	"github.com/hyperledger/fabric-protos-go/ledger/queryresult"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -157,6 +158,117 @@ var _ = Describe("FabricProxy", func() {
 				key, value := stub.PutStateArgsForCall(0)
 				Expect(key).To(Equal("007"), "Should call PutState with correct key")
 				Expect(value).To(Equal([]byte("bond")), "Should call PutState with correct value")
+			})
+		})
+
+		Context("With a GetStatesRequest_ByKeyRange request", func() {
+			var (
+				request *contract.GetStatesRequest
+				query   *contract.GetStatesRequest_ByKeyRange
+			)
+
+			BeforeEach(func() {
+				context := &contract.TransactionContext{}
+				context.ChannelId = "channel1"
+				context.TransactionId = "txn1"
+				query = &contract.GetStatesRequest_ByKeyRange{}
+				request = &contract.GetStatesRequest{}
+				request.Context = context
+			})
+
+			It("should handle missing context error", func() {
+				keyRangeQuery := &contract.KeyRangeQuery{}
+				keyRangeQuery.StartKey = "001"
+				keyRangeQuery.EndKey = "009"
+				query.ByKeyRange = keyRangeQuery
+				request.Query = query
+				payload, _ := proto.Marshal(request)
+
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "GetStates", payload)
+				Expect(result).To(BeNil())
+				Expect(err).To(MatchError("GetStates failed: No stub found for transaction context channel1 txn1"))
+			})
+
+			It("should get the specified range of states", func() {
+				sqi := &fakes.StateQueryIteratorInterface{}
+				sqi.HasNextReturnsOnCall(0, true)
+				sqi.HasNextReturnsOnCall(1, true)
+				sqi.HasNextReturnsOnCall(2, false)
+				sqi.NextReturnsOnCall(0, &queryresult.KV{
+					Key:   "007",
+					Value: []byte("bond"),
+				}, nil)
+				sqi.NextReturnsOnCall(1, &queryresult.KV{
+					Key:   "008",
+					Value: []byte("not bond"),
+				}, nil)
+
+				stub := &fakes.ChaincodeStubInterface{}
+				stub.GetStateByRangeReturns(sqi, nil)
+				contextStore.Put("channel1", "txn1", stub)
+
+				keyRangeQuery := &contract.KeyRangeQuery{}
+				keyRangeQuery.StartKey = "001"
+				keyRangeQuery.EndKey = "009"
+				query.ByKeyRange = keyRangeQuery
+				request.Query = query
+				payload, _ := proto.Marshal(request)
+
+				result, _ := proxy.FabricCall(ctx, "wapc", "LedgerService", "GetStates", payload)
+
+				Expect(stub.GetStateByRangeCallCount()).To(Equal(1), "Should call GetStateByRange once")
+				startKey, endKey := stub.GetStateByRangeArgsForCall(0)
+				Expect(startKey).To(Equal("001"), "Should call GetStateByRange with specified start key")
+				Expect(endKey).To(Equal("009"), "Should call GetStateByRange with specified end key")
+
+				response := &contract.GetStatesResponse{}
+				_ = proto.Unmarshal(result, response)
+				states := response.GetStates()
+				Expect(len(states)).To(Equal(2))
+				Expect(states[0].Key).To(Equal("007"))
+				Expect(states[0].Value).To(Equal([]byte("bond")))
+				Expect(states[1].Key).To(Equal("008"))
+				Expect(states[1].Value).To(Equal([]byte("not bond")))
+			})
+
+			It("should handle an unbounded start key", func() {
+				sqi := &fakes.StateQueryIteratorInterface{}
+				stub := &fakes.ChaincodeStubInterface{}
+				stub.GetStateByRangeReturns(sqi, nil)
+				contextStore.Put("channel1", "txn1", stub)
+
+				keyRangeQuery := &contract.KeyRangeQuery{}
+				keyRangeQuery.EndKey = "009"
+				query.ByKeyRange = keyRangeQuery
+				request.Query = query
+				payload, _ := proto.Marshal(request)
+
+				Expect(proxy.FabricCall(ctx, "wapc", "LedgerService", "GetStates", payload)).NotTo(BeNil())
+
+				Expect(stub.GetStateByRangeCallCount()).To(Equal(1), "Should call GetStateByRange once")
+				startKey, endKey := stub.GetStateByRangeArgsForCall(0)
+				Expect(startKey).To(Equal(""), "Should call GetStateByRange with an unspecified start key")
+				Expect(endKey).To(Equal("009"), "Should call GetStateByRange with specified end key")
+			})
+
+			It("should handle an unbounded end key", func() {
+				sqi := &fakes.StateQueryIteratorInterface{}
+				stub := &fakes.ChaincodeStubInterface{}
+				stub.GetStateByRangeReturns(sqi, nil)
+				contextStore.Put("channel1", "txn1", stub)
+
+				keyRangeQuery := &contract.KeyRangeQuery{}
+				keyRangeQuery.StartKey = "001"
+				query.ByKeyRange = keyRangeQuery
+				request.Query = query
+				payload, _ := proto.Marshal(request)
+
+				Expect(proxy.FabricCall(ctx, "wapc", "LedgerService", "GetStates", payload)).NotTo(BeNil())
+
+				Expect(stub.GetStateByRangeCallCount()).To(Equal(1), "Should call GetStateByRange once")
+				startKey, endKey := stub.GetStateByRangeArgsForCall(0)
+				Expect(startKey).To(Equal("001"), "Should call GetStateByRange with specified start key")
+				Expect(endKey).To(Equal(""), "Should call GetStateByRange with an unspecified end key")
 			})
 		})
 	})

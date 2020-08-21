@@ -9,6 +9,7 @@ import (
 	"log"
 
 	contract "github.com/hyperledgendary/fabric-ledger-protos-go/contract"
+	"github.com/hyperledger/fabric-chaincode-go/shim"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -69,6 +70,15 @@ func (proxy *FabricProxy) FabricCall(ctx context.Context, binding, namespace, op
 			}
 
 			return proxy.updateState(request)
+		case "GetStates":
+			log.Printf("[host] Processing GetStatesRequest...\n")
+			request := &contract.GetStatesRequest{}
+			err := proto.Unmarshal(payload, request)
+			if err != nil {
+				return nil, err
+			}
+
+			return proxy.getStates(request)
 		}
 	}
 
@@ -179,5 +189,51 @@ func (proxy *FabricProxy) existsState(request *contract.ExistsStateRequest) ([]b
 	}
 
 	log.Printf("[host] Exists State done")
+	return proto.Marshal(response)
+}
+
+func (proxy *FabricProxy) getStates(request *contract.GetStatesRequest) ([]byte, error) {
+	context := request.Context
+	log.Printf("[host] GetStates txid %s chid %s\n", context.TransactionId, context.ChannelId)
+
+	stub, err := proxy.contextStore.Get(context)
+	if err != nil {
+		return nil, fmt.Errorf("GetStates failed: %s", err.Error())
+	}
+
+	switch qt := request.Query.(type) {
+	case *contract.GetStatesRequest_ByKeyRange:
+		keyRangeQuery := request.GetByKeyRange()
+		return proxy.getStatesByKeyRange(stub, keyRangeQuery)
+	default:
+		return nil, fmt.Errorf("GetStates failed: unsupported query type %T", qt)
+	}
+}
+
+func (proxy *FabricProxy) getStatesByKeyRange(stub shim.ChaincodeStubInterface, query *contract.KeyRangeQuery) ([]byte, error) {
+
+	resultsIterator, err := stub.GetStateByRange(query.StartKey, query.EndKey)
+	if err != nil {
+		return nil, fmt.Errorf("GetStates (ByKeyRange) failed: %s", err.Error())
+	}
+	defer resultsIterator.Close()
+
+	response := &contract.GetStatesResponse{}
+	states := []*contract.State{}
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			return nil, fmt.Errorf("GetStates (ByKeyRange) failed: %s", err.Error())
+		}
+
+		state := &contract.State{}
+		state.Key = queryResponse.Key
+		state.Value = queryResponse.Value
+
+		states = append(states, state)
+	}
+	response.States = states
+
+	log.Printf("[host] Get States (ByKeyRange) done")
 	return proto.Marshal(response)
 }
