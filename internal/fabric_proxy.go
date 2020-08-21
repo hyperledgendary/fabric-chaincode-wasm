@@ -110,12 +110,21 @@ func (proxy *FabricProxy) updateState(request *contract.UpdateStateRequest) ([]b
 
 	stub, err := proxy.contextStore.Get(context)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to write to world state. %s", err.Error())
+		return nil, fmt.Errorf("UpdateState failed: %s", err.Error())
+	}
+
+	stateBytes, err := stub.GetState(state.Key)
+	if err != nil {
+		return nil, fmt.Errorf("UpdateState failed: %s", err.Error())
+	}
+
+	if stateBytes == nil {
+		return nil, fmt.Errorf("UpdateState failed: No state exists for key %s", state.Key)
 	}
 
 	err = stub.PutState(state.Key, state.Value)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to write to world state. %s", err.Error())
+		return nil, fmt.Errorf("UpdateState failed: %s", err.Error())
 	}
 
 	log.Printf("[host] UpdateState done")

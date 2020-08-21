@@ -101,7 +101,62 @@ var _ = Describe("FabricProxy", func() {
 				key := stub.GetStateArgsForCall(0)
 				Expect(key).To(Equal("007"), "Should call GetState with correct key")
 
-				Expect(stub.PutStateCallCount()).To(Equal(0))
+				Expect(stub.PutStateCallCount()).To(Equal(0), "Should not call PutState")
+			})
+		})
+
+		Context("With an UpdateState request", func() {
+			var payload []byte
+
+			BeforeEach(func() {
+				context := &contract.TransactionContext{}
+				context.ChannelId = "channel1"
+				context.TransactionId = "txn1"
+				state := &contract.State{}
+				state.Key = "007"
+				state.Value = []byte("bond")
+				request := &contract.UpdateStateRequest{}
+				request.Context = context
+				request.State = state
+				payload, _ = proto.Marshal(request)
+			})
+
+			It("should handle missing context error", func() {
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "UpdateState", payload)
+				Expect(result).To(BeNil())
+				Expect(err).To(MatchError("UpdateState failed: No stub found for transaction context channel1 txn1"))
+			})
+
+			It("should fail if the state does not already exist", func() {
+				stub := &fakes.ChaincodeStubInterface{}
+				contextStore.Put("channel1", "txn1", stub)
+
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "UpdateState", payload)
+				Expect(result).To(BeNil())
+				Expect(err).To(MatchError("UpdateState failed: No state exists for key 007"))
+
+				Expect(stub.GetStateCallCount()).To(Equal(1), "Should call GetState once")
+				key := stub.GetStateArgsForCall(0)
+				Expect(key).To(Equal("007"), "Should call GetState with correct key")
+
+				Expect(stub.PutStateCallCount()).To(Equal(0), "Should not call PutState")
+			})
+
+			It("should update a state which already exists", func() {
+				stub := &fakes.ChaincodeStubInterface{}
+				stub.GetStateReturns([]byte("dr evil"), nil)
+				contextStore.Put("channel1", "txn1", stub)
+
+				Expect(proxy.FabricCall(ctx, "wapc", "LedgerService", "UpdateState", payload)).To(BeNil())
+
+				Expect(stub.GetStateCallCount()).To(Equal(1), "Should call GetState once")
+				key := stub.GetStateArgsForCall(0)
+				Expect(key).To(Equal("007"), "Should call GetState with correct key")
+
+				Expect(stub.PutStateCallCount()).To(Equal(1), "Should call PutState once")
+				key, value := stub.PutStateArgsForCall(0)
+				Expect(key).To(Equal("007"), "Should call PutState with correct key")
+				Expect(value).To(Equal([]byte("bond")), "Should call PutState with correct value")
 			})
 		})
 	})
