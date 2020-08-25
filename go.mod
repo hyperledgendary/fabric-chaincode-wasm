@@ -4,7 +4,7 @@ go 1.14
 
 require (
 	github.com/golang/protobuf v1.4.2
-	github.com/hyperledgendary/fabric-ledger-protos-go v0.5.0
+	github.com/hyperledgendary/fabric-ledger-protos-go v0.6.0
 	github.com/hyperledger/fabric-chaincode-go v0.0.0-20200128192331-2d899240a7ed
 	github.com/hyperledger/fabric-protos-go v0.0.0-20190919234611-2a87503ac7c9
 	github.com/maxbrunsfeld/counterfeiter/v6 v6.2.3 // indirect
