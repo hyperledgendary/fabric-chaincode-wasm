@@ -52,42 +52,46 @@ func (wc *WasmContract) callTransaction(APIstub shim.ChaincodeStubInterface) ([]
 
 	err := wc.contextStore.Put(channelID, txID, APIstub)
 	if err != nil {
+		log.Printf("[host] error putting stub for context chid %s txid %s: %s\n", channelID, txID, err)
 		return nil, err
 	}
 	defer func() {
 		err := wc.contextStore.Remove(channelID, txID)
 		if err != nil {
-			log.Println(err)
+			log.Printf("[host] error removing stub for context chid %s txid %s: %s\n", channelID, txID, err)
 		}
 	}()
 
 	function, params := APIstub.GetFunctionAndParameters()
 
-	log.Printf("[host] calling %s channelID=%s txID=%s", function, channelID, txID)
+	log.Printf("[host] calling %s with context chid %s txid %s\n", function, channelID, txID)
 
 	args, err := createInvokeTransactionArgs(channelID, txID, function, params)
 	if err != nil {
+		log.Printf("[host] error creating invoke transaction request message: %s\n", err)
 		return nil, err
 	}
 
 	wapcInstance, err := wc.wapcPool.Get(10 * time.Millisecond)
 	if err != nil {
+		log.Printf("[host] error getting waPC instance: %s\n", err)
 		return nil, err
 	}
 	defer func() {
 		err := wc.wapcPool.Return(wapcInstance)
 		if err != nil {
-			log.Println(err)
+			log.Printf("[host] error returning waPC instance: %s\n", err)
 		}
 	}()
 
 	ctx := context.Background()
 	result, err := wapcInstance.Invoke(ctx, "InvokeTransaction", args)
 	if err != nil {
+		log.Printf("[host] error invoking transaction: %s\n", err)
 		return nil, err
 	}
 
-	log.Printf("[host] success result=%s", string(result))
+	log.Printf("[host] success result=%s\n", string(result))
 	fmt.Println(string(result))
 	return result, nil
 }
