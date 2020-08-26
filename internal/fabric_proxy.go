@@ -75,25 +75,45 @@ func (proxy *FabricProxy) createState(payload []byte) ([]byte, error) {
 
 	context := request.GetContext()
 	state := request.GetState()
-	log.Printf("[host] CreateState txid %s chid %s key %s value length %d\n", context.TransactionId, context.ChannelId, state.Key, len(state.Value))
+	stateKey := state.GetKey()
+	log.Printf("[host] CreateState txid %s chid %s key %s value length %d\n", context.TransactionId, context.ChannelId, stateKey, len(state.Value))
 
 	stub, err := proxy.contextStore.Get(context)
 	if err != nil {
 		return nil, fmt.Errorf("CreateState failed: %s", err.Error())
 	}
 
-	stateBytes, err := stub.GetState(state.Key)
-	if err != nil {
-		return nil, fmt.Errorf("CreateState failed: %s", err.Error())
-	}
+	collection := request.GetCollection()
+	if collection != nil || collection.GetName() != "" {
+		collectionName := collection.GetName()
 
-	if stateBytes != nil {
-		return nil, fmt.Errorf("CreateState failed: State already exists for key %s", state.Key)
-	}
+		stateBytes, err := stub.GetPrivateData(collectionName, stateKey)
+		if err != nil {
+			return nil, fmt.Errorf("CreateState failed for collection %s: %s", collectionName, err.Error())
+		}
 
-	err = stub.PutState(state.Key, state.Value)
-	if err != nil {
-		return nil, fmt.Errorf("CreateState failed: %s", err.Error())
+		if stateBytes != nil {
+			return nil, fmt.Errorf("CreateState failed for collection %s: State already exists for key %s", collectionName, stateKey)
+		}
+
+		err = stub.PutPrivateData(collectionName, stateKey, state.GetValue())
+		if err != nil {
+			return nil, fmt.Errorf("CreateState failed for collection %s: %s", collectionName, err.Error())
+		}
+	} else {
+		stateBytes, err := stub.GetState(stateKey)
+		if err != nil {
+			return nil, fmt.Errorf("CreateState failed: %s", err.Error())
+		}
+
+		if stateBytes != nil {
+			return nil, fmt.Errorf("CreateState failed: State already exists for key %s", stateKey)
+		}
+
+		err = stub.PutState(stateKey, state.GetValue())
+		if err != nil {
+			return nil, fmt.Errorf("CreateState failed: %s", err.Error())
+		}
 	}
 
 	log.Printf("[host] CreateState done")
@@ -109,25 +129,45 @@ func (proxy *FabricProxy) updateState(payload []byte) ([]byte, error) {
 
 	context := request.GetContext()
 	state := request.GetState()
-	log.Printf("[host] UpdateState txid %s chid %s key %s value length %d\n", context.TransactionId, context.ChannelId, state.Key, len(state.Value))
+	stateKey := state.GetKey()
+	log.Printf("[host] UpdateState txid %s chid %s key %s value length %d\n", context.TransactionId, context.ChannelId, stateKey, len(state.Value))
 
 	stub, err := proxy.contextStore.Get(context)
 	if err != nil {
 		return nil, fmt.Errorf("UpdateState failed: %s", err.Error())
 	}
 
-	stateBytes, err := stub.GetState(state.Key)
-	if err != nil {
-		return nil, fmt.Errorf("UpdateState failed: %s", err.Error())
-	}
+	collection := request.GetCollection()
+	if collection != nil || collection.GetName() != "" {
+		collectionName := collection.GetName()
 
-	if stateBytes == nil {
-		return nil, fmt.Errorf("UpdateState failed: No state exists for key %s", state.Key)
-	}
+		stateBytes, err := stub.GetPrivateData(collectionName, stateKey)
+		if err != nil {
+			return nil, fmt.Errorf("UpdateState failed for collection %s: %s", collectionName, err.Error())
+		}
 
-	err = stub.PutState(state.Key, state.Value)
-	if err != nil {
-		return nil, fmt.Errorf("UpdateState failed: %s", err.Error())
+		if stateBytes == nil {
+			return nil, fmt.Errorf("UpdateState failed for collection %s: No state exists for key %s", collectionName, stateKey)
+		}
+
+		err = stub.PutPrivateData(collectionName, stateKey, state.GetValue())
+		if err != nil {
+			return nil, fmt.Errorf("UpdateState failed for collection %s: %s", collectionName, err.Error())
+		}
+	} else {
+		stateBytes, err := stub.GetState(stateKey)
+		if err != nil {
+			return nil, fmt.Errorf("UpdateState failed: %s", err.Error())
+		}
+
+		if stateBytes == nil {
+			return nil, fmt.Errorf("UpdateState failed: No state exists for key %s", stateKey)
+		}
+
+		err = stub.PutState(stateKey, state.GetValue())
+		if err != nil {
+			return nil, fmt.Errorf("UpdateState failed: %s", err.Error())
+		}
 	}
 
 	log.Printf("[host] UpdateState done")
@@ -147,22 +187,41 @@ func (proxy *FabricProxy) readState(payload []byte) ([]byte, error) {
 
 	stub, err := proxy.contextStore.Get(context)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to read from world state. %s", err.Error())
+		return nil, fmt.Errorf("ReadState failed: %s", err.Error())
 	}
 
 	response := &contract.ReadStateResponse{}
 	state := &contract.State{}
-	log.Printf("ReadState done")
-	stateBytes, err := stub.GetState(stateKey)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to read from world state. %s", err.Error())
+
+	var stateBytes []byte
+	collection := request.GetCollection()
+	if collection != nil || collection.GetName() != "" {
+		collectionName := collection.GetName()
+
+		stateBytes, err = stub.GetPrivateData(collectionName, stateKey)
+		if err != nil {
+			return nil, fmt.Errorf("ReadState failed for collection %s: %s", collectionName, err.Error())
+		}
+
+		if stateBytes == nil {
+			return nil, fmt.Errorf("ReadState failed for collection %s: State %s does not exist", collectionName, stateKey)
+		}
+	} else {
+		stateBytes, err = stub.GetState(stateKey)
+		if err != nil {
+			return nil, fmt.Errorf("ReadState failed: %s", err.Error())
+		}
+
+		if stateBytes == nil {
+			return nil, fmt.Errorf("ReadState failed: State %s does not exist", stateKey)
+		}
 	}
 
-	state.Key = request.StateKey
+	state.Key = stateKey
 	state.Value = stateBytes
 	response.State = state
 
-	log.Printf("[host] Read State done")
+	log.Printf("[host] Read State done\n")
 	return proto.Marshal(response)
 }
 
@@ -179,12 +238,23 @@ func (proxy *FabricProxy) existsState(payload []byte) ([]byte, error) {
 
 	stub, err := proxy.contextStore.Get(context)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to read from world state. %s", err.Error())
+		return nil, fmt.Errorf("ExistsState failed: %s", err.Error())
 	}
 
-	stateBytes, err := stub.GetState(stateKey)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to read from world state. %s", err.Error())
+	var stateBytes []byte
+	collection := request.GetCollection()
+	if collection != nil || collection.GetName() != "" {
+		collectionName := collection.GetName()
+
+		stateBytes, err = stub.GetPrivateData(collectionName, stateKey)
+		if err != nil {
+			return nil, fmt.Errorf("ExistsState failed for collection %s: %s", collectionName, err.Error())
+		}
+	} else {
+		stateBytes, err = stub.GetState(stateKey)
+		if err != nil {
+			return nil, fmt.Errorf("ExistsState failed: %s", err.Error())
+		}
 	}
 
 	response := &contract.ExistsStateResponse{}
