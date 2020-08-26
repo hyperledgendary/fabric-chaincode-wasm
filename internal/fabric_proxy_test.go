@@ -59,7 +59,7 @@ var _ = Describe("FabricProxy", func() {
 			})
 		})
 
-		Context("With a CreateState request", func() {
+		Context("With a world state CreateState request", func() {
 			var payload []byte
 
 			BeforeEach(func() {
@@ -81,23 +81,25 @@ var _ = Describe("FabricProxy", func() {
 				Expect(err).To(MatchError("CreateState failed: No stub found for transaction context channel1 txn1"))
 			})
 
-			It("should create a new state if it does not already exist", func() {
+			It("should create a new state if it does not already exist in the world state", func() {
 				stub := &fakes.ChaincodeStubInterface{}
 				contextStore.Put("channel1", "txn1", stub)
 
 				Expect(proxy.FabricCall(ctx, "wapc", "LedgerService", "CreateState", payload)).To(BeNil())
 
 				Expect(stub.GetStateCallCount()).To(Equal(1), "Should call GetState once")
+				Expect(stub.GetPrivateDataCallCount()).To(Equal(0), "Should not call GetPrivateData")
 				key := stub.GetStateArgsForCall(0)
 				Expect(key).To(Equal("007"), "Should call GetState with correct key")
 
 				Expect(stub.PutStateCallCount()).To(Equal(1), "Should call PutState once")
+				Expect(stub.PutPrivateDataCallCount()).To(Equal(0), "Should not call PutPrivateData")
 				key, value := stub.PutStateArgsForCall(0)
 				Expect(key).To(Equal("007"), "Should call PutState with correct key")
 				Expect(value).To(Equal([]byte("bond")), "Should call PutState with correct value")
 			})
 
-			It("should fail if the state already exists", func() {
+			It("should fail if the state already exists in the world state", func() {
 				stub := &fakes.ChaincodeStubInterface{}
 				stub.GetStateReturns([]byte("dr evil"), nil)
 				contextStore.Put("channel1", "txn1", stub)
@@ -107,14 +109,313 @@ var _ = Describe("FabricProxy", func() {
 				Expect(err).To(MatchError("CreateState failed: State already exists for key 007"))
 
 				Expect(stub.GetStateCallCount()).To(Equal(1), "Should call GetState once")
+				Expect(stub.GetPrivateDataCallCount()).To(Equal(0), "Should not call GetPrivateData")
 				key := stub.GetStateArgsForCall(0)
 				Expect(key).To(Equal("007"), "Should call GetState with correct key")
 
 				Expect(stub.PutStateCallCount()).To(Equal(0), "Should not call PutState")
+				Expect(stub.PutPrivateDataCallCount()).To(Equal(0), "Should not call PutPrivateData")
 			})
 		})
 
-		Context("With an UpdateState request", func() {
+		Context("With a named collection CreateState request", func() {
+			var payload []byte
+
+			BeforeEach(func() {
+				context := &contract.TransactionContext{}
+				context.ChannelId = "channel1"
+				context.TransactionId = "txn1"
+				collection := &contract.Collection{}
+				collection.Name = "private"
+				state := &contract.State{}
+				state.Key = "007"
+				state.Value = []byte("bond")
+				request := &contract.CreateStateRequest{}
+				request.Context = context
+				request.Collection = collection
+				request.State = state
+				payload, _ = proto.Marshal(request)
+			})
+
+			It("should handle missing context error", func() {
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "CreateState", payload)
+				Expect(result).To(BeNil())
+				Expect(err).To(MatchError("CreateState failed: No stub found for transaction context channel1 txn1"))
+			})
+
+			It("should create a new state if it does not already exist in a named collection", func() {
+				stub := &fakes.ChaincodeStubInterface{}
+				contextStore.Put("channel1", "txn1", stub)
+
+				Expect(proxy.FabricCall(ctx, "wapc", "LedgerService", "CreateState", payload)).To(BeNil())
+
+				Expect(stub.GetStateCallCount()).To(Equal(0), "Should not call GetState")
+				Expect(stub.GetPrivateDataCallCount()).To(Equal(1), "Should call GetPrivateData once")
+				collection, key := stub.GetPrivateDataArgsForCall(0)
+				Expect(collection).To(Equal("private"), "Should call GetPrivateData with correct collection name")
+				Expect(key).To(Equal("007"), "Should call GetPrivateData with correct key")
+
+				Expect(stub.PutStateCallCount()).To(Equal(0), "Should not call PutState")
+				Expect(stub.PutPrivateDataCallCount()).To(Equal(1), "Should call PutPrivateData once")
+				collection, key, value := stub.PutPrivateDataArgsForCall(0)
+				Expect(collection).To(Equal("private"), "Should call PutPrivateData with correct collection name")
+				Expect(key).To(Equal("007"), "Should call PutPrivateData with correct key")
+				Expect(value).To(Equal([]byte("bond")), "Should call PutPrivateData with correct value")
+			})
+
+			It("should fail if the state already exists in a named collection", func() {
+				stub := &fakes.ChaincodeStubInterface{}
+				stub.GetPrivateDataReturns([]byte("dr evil"), nil)
+				contextStore.Put("channel1", "txn1", stub)
+
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "CreateState", payload)
+				Expect(result).To(BeNil())
+				Expect(err).To(MatchError("CreateState failed for collection private: State already exists for key 007"))
+
+				Expect(stub.GetStateCallCount()).To(Equal(0), "Should not call GetState")
+				Expect(stub.GetPrivateDataCallCount()).To(Equal(1), "Should call GetPrivateData once")
+				collection, key := stub.GetPrivateDataArgsForCall(0)
+				Expect(collection).To(Equal("private"), "Should call GetPrivateData with correct collection name")
+				Expect(key).To(Equal("007"), "Should call GetPrivateData with correct key")
+
+				Expect(stub.PutStateCallCount()).To(Equal(0), "Should not call PutState")
+				Expect(stub.PutPrivateDataCallCount()).To(Equal(0), "Should not call PutPrivateData")
+			})
+		})
+
+		Context("With a world state ReadState request", func() {
+			var payload []byte
+
+			BeforeEach(func() {
+				context := &contract.TransactionContext{}
+				context.ChannelId = "channel1"
+				context.TransactionId = "txn1"
+				request := &contract.ReadStateRequest{}
+				request.Context = context
+				request.StateKey = "007"
+				payload, _ = proto.Marshal(request)
+			})
+
+			It("should handle missing context error", func() {
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "ReadState", payload)
+				Expect(result).To(BeNil())
+				Expect(err).To(MatchError("ReadState failed: No stub found for transaction context channel1 txn1"))
+			})
+
+			It("should fail if the state key does not exist in the world state", func() {
+				stub := &fakes.ChaincodeStubInterface{}
+				contextStore.Put("channel1", "txn1", stub)
+				stub.GetStateReturns(nil, nil)
+
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "ReadState", payload)
+				Expect(result).To(BeNil())
+				Expect(err).To(MatchError("ReadState failed: State 007 does not exist"))
+
+				Expect(stub.GetStateCallCount()).To(Equal(1), "Should call GetState once")
+				Expect(stub.GetPrivateDataCallCount()).To(Equal(0), "Should not call GetPrivateData")
+				key := stub.GetStateArgsForCall(0)
+				Expect(key).To(Equal("007"), "Should call GetState with correct key")
+			})
+
+			It("should return the correct value if the state key does exist in the world state", func() {
+				stub := &fakes.ChaincodeStubInterface{}
+				contextStore.Put("channel1", "txn1", stub)
+				stub.GetStateReturns([]byte("bond"), nil)
+
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "ReadState", payload)
+				Expect(err).To(BeNil())
+
+				Expect(stub.GetStateCallCount()).To(Equal(1), "Should call GetState once")
+				Expect(stub.GetPrivateDataCallCount()).To(Equal(0), "Should not call GetPrivateData")
+				key := stub.GetStateArgsForCall(0)
+				Expect(key).To(Equal("007"), "Should call GetState with correct key")
+
+				response := &contract.ReadStateResponse{}
+				_ = proto.Unmarshal(result, response)
+				state := response.GetState()
+				Expect(state.Key).To(Equal("007"))
+				Expect(state.Value).To(Equal([]byte("bond")))
+			})
+		})
+
+		Context("With a named collection ReadState request", func() {
+			var payload []byte
+
+			BeforeEach(func() {
+				context := &contract.TransactionContext{}
+				context.ChannelId = "channel1"
+				context.TransactionId = "txn1"
+				collection := &contract.Collection{}
+				collection.Name = "private"
+				request := &contract.ReadStateRequest{}
+				request.Context = context
+				request.Collection = collection
+				request.StateKey = "007"
+				payload, _ = proto.Marshal(request)
+			})
+
+			It("should handle missing context error", func() {
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "ReadState", payload)
+				Expect(result).To(BeNil())
+				Expect(err).To(MatchError("ReadState failed: No stub found for transaction context channel1 txn1"))
+			})
+
+			It("should fail if the state key does not exist in a named collection", func() {
+				stub := &fakes.ChaincodeStubInterface{}
+				contextStore.Put("channel1", "txn1", stub)
+				stub.GetStateReturns(nil, nil)
+
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "ReadState", payload)
+				Expect(result).To(BeNil())
+				Expect(err).To(MatchError("ReadState failed for collection private: State 007 does not exist"))
+
+				Expect(stub.GetStateCallCount()).To(Equal(0), "Should not call GetState")
+				Expect(stub.GetPrivateDataCallCount()).To(Equal(1), "Should call GetPrivateData once")
+				collection, key := stub.GetPrivateDataArgsForCall(0)
+				Expect(collection).To(Equal("private"), "Should call GetPrivateData with correct collection name")
+				Expect(key).To(Equal("007"), "Should call GetPrivateData with correct key")
+			})
+
+			It("should return the correct value if the state key does exist in a named collection", func() {
+				stub := &fakes.ChaincodeStubInterface{}
+				contextStore.Put("channel1", "txn1", stub)
+				stub.GetPrivateDataReturns([]byte("bond"), nil)
+
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "ReadState", payload)
+				Expect(err).To(BeNil())
+
+				Expect(stub.GetStateCallCount()).To(Equal(0), "Should not call GetState")
+				Expect(stub.GetPrivateDataCallCount()).To(Equal(1), "Should call GetPrivateData once")
+				collection, key := stub.GetPrivateDataArgsForCall(0)
+				Expect(collection).To(Equal("private"), "Should call GetPrivateData with correct collection name")
+				Expect(key).To(Equal("007"), "Should call GetPrivateData with correct key")
+
+				response := &contract.ReadStateResponse{}
+				_ = proto.Unmarshal(result, response)
+				state := response.GetState()
+				Expect(state.Key).To(Equal("007"))
+				Expect(state.Value).To(Equal([]byte("bond")))
+			})
+		})
+
+		Context("With a world state ExistsState request", func() {
+			var payload []byte
+
+			BeforeEach(func() {
+				context := &contract.TransactionContext{}
+				context.ChannelId = "channel1"
+				context.TransactionId = "txn1"
+				request := &contract.ExistsStateRequest{}
+				request.Context = context
+				request.StateKey = "007"
+				payload, _ = proto.Marshal(request)
+			})
+
+			It("should handle missing context error", func() {
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "ExistsState", payload)
+				Expect(result).To(BeNil())
+				Expect(err).To(MatchError("ExistsState failed: No stub found for transaction context channel1 txn1"))
+			})
+
+			It("should return false if the state key does not exist in the world state", func() {
+				stub := &fakes.ChaincodeStubInterface{}
+				contextStore.Put("channel1", "txn1", stub)
+				stub.GetStateReturns(nil, nil)
+
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "ExistsState", payload)
+				Expect(err).To(BeNil())
+
+				Expect(stub.GetStateCallCount()).To(Equal(1), "Should call GetState once")
+				Expect(stub.GetPrivateDataCallCount()).To(Equal(0), "Should not call GetPrivateData")
+				key := stub.GetStateArgsForCall(0)
+				Expect(key).To(Equal("007"), "Should call GetState with correct key")
+
+				response := &contract.ExistsStateResponse{}
+				_ = proto.Unmarshal(result, response)
+				Expect(response.GetExists()).To(BeFalse())
+			})
+
+			It("should return true if the state key does exist in the world state", func() {
+				stub := &fakes.ChaincodeStubInterface{}
+				contextStore.Put("channel1", "txn1", stub)
+				stub.GetStateReturns([]byte("bond"), nil)
+
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "ExistsState", payload)
+				Expect(err).To(BeNil())
+
+				Expect(stub.GetStateCallCount()).To(Equal(1), "Should call GetState once")
+				Expect(stub.GetPrivateDataCallCount()).To(Equal(0), "Should not call GetPrivateData")
+				key := stub.GetStateArgsForCall(0)
+				Expect(key).To(Equal("007"), "Should call GetState with correct key")
+
+				response := &contract.ExistsStateResponse{}
+				_ = proto.Unmarshal(result, response)
+				Expect(response.GetExists()).To(BeTrue())
+			})
+		})
+
+		Context("With a named collection ExistsState request", func() {
+			var payload []byte
+
+			BeforeEach(func() {
+				context := &contract.TransactionContext{}
+				context.ChannelId = "channel1"
+				context.TransactionId = "txn1"
+				collection := &contract.Collection{}
+				collection.Name = "private"
+				request := &contract.ExistsStateRequest{}
+				request.Context = context
+				request.Collection = collection
+				request.StateKey = "007"
+				payload, _ = proto.Marshal(request)
+			})
+
+			It("should handle missing context error", func() {
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "ExistsState", payload)
+				Expect(result).To(BeNil())
+				Expect(err).To(MatchError("ExistsState failed: No stub found for transaction context channel1 txn1"))
+			})
+
+			It("should return false if the state key does not exist in the world state", func() {
+				stub := &fakes.ChaincodeStubInterface{}
+				contextStore.Put("channel1", "txn1", stub)
+				stub.GetPrivateDataReturns(nil, nil)
+
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "ExistsState", payload)
+				Expect(err).To(BeNil())
+
+				Expect(stub.GetStateCallCount()).To(Equal(0), "Should not call GetState")
+				Expect(stub.GetPrivateDataCallCount()).To(Equal(1), "Should call GetPrivateData once")
+				collection, key := stub.GetPrivateDataArgsForCall(0)
+				Expect(collection).To(Equal("private"), "Should call GetPrivateData with correct collection name")
+				Expect(key).To(Equal("007"), "Should call GetPrivateData with correct key")
+
+				response := &contract.ExistsStateResponse{}
+				_ = proto.Unmarshal(result, response)
+				Expect(response.GetExists()).To(BeFalse())
+			})
+
+			It("should return true if the state key does exist in the world state", func() {
+				stub := &fakes.ChaincodeStubInterface{}
+				contextStore.Put("channel1", "txn1", stub)
+				stub.GetPrivateDataReturns([]byte("bond"), nil)
+
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "ExistsState", payload)
+				Expect(err).To(BeNil())
+
+				Expect(stub.GetStateCallCount()).To(Equal(0), "Should not call GetState")
+				Expect(stub.GetPrivateDataCallCount()).To(Equal(1), "Should call GetPrivateData once")
+				collection, key := stub.GetPrivateDataArgsForCall(0)
+				Expect(collection).To(Equal("private"), "Should call GetPrivateData with correct collection name")
+				Expect(key).To(Equal("007"), "Should call GetPrivateData with correct key")
+
+				response := &contract.ExistsStateResponse{}
+				_ = proto.Unmarshal(result, response)
+				Expect(response.GetExists()).To(BeTrue())
+			})
+		})
+
+		Context("With a world state UpdateState request", func() {
 			var payload []byte
 
 			BeforeEach(func() {
@@ -136,7 +437,7 @@ var _ = Describe("FabricProxy", func() {
 				Expect(err).To(MatchError("UpdateState failed: No stub found for transaction context channel1 txn1"))
 			})
 
-			It("should fail if the state does not already exist", func() {
+			It("should fail if the state does not already exist in the world state", func() {
 				stub := &fakes.ChaincodeStubInterface{}
 				contextStore.Put("channel1", "txn1", stub)
 
@@ -145,13 +446,15 @@ var _ = Describe("FabricProxy", func() {
 				Expect(err).To(MatchError("UpdateState failed: No state exists for key 007"))
 
 				Expect(stub.GetStateCallCount()).To(Equal(1), "Should call GetState once")
+				Expect(stub.GetPrivateDataCallCount()).To(Equal(0), "Should not call GetPrivateData")
 				key := stub.GetStateArgsForCall(0)
 				Expect(key).To(Equal("007"), "Should call GetState with correct key")
 
 				Expect(stub.PutStateCallCount()).To(Equal(0), "Should not call PutState")
+				Expect(stub.PutPrivateDataCallCount()).To(Equal(0), "Should not call PutPrivateData")
 			})
 
-			It("should update a state which already exists", func() {
+			It("should update a state which already exists in the world state", func() {
 				stub := &fakes.ChaincodeStubInterface{}
 				stub.GetStateReturns([]byte("dr evil"), nil)
 				contextStore.Put("channel1", "txn1", stub)
@@ -159,13 +462,80 @@ var _ = Describe("FabricProxy", func() {
 				Expect(proxy.FabricCall(ctx, "wapc", "LedgerService", "UpdateState", payload)).To(BeNil())
 
 				Expect(stub.GetStateCallCount()).To(Equal(1), "Should call GetState once")
+				Expect(stub.GetPrivateDataCallCount()).To(Equal(0), "Should not call GetPrivateData")
 				key := stub.GetStateArgsForCall(0)
 				Expect(key).To(Equal("007"), "Should call GetState with correct key")
 
 				Expect(stub.PutStateCallCount()).To(Equal(1), "Should call PutState once")
+				Expect(stub.PutPrivateDataCallCount()).To(Equal(0), "Should not call PutPrivateData")
 				key, value := stub.PutStateArgsForCall(0)
 				Expect(key).To(Equal("007"), "Should call PutState with correct key")
 				Expect(value).To(Equal([]byte("bond")), "Should call PutState with correct value")
+			})
+		})
+
+		Context("With a named collection UpdateState request", func() {
+			var payload []byte
+
+			BeforeEach(func() {
+				context := &contract.TransactionContext{}
+				context.ChannelId = "channel1"
+				context.TransactionId = "txn1"
+				collection := &contract.Collection{}
+				collection.Name = "private"
+				state := &contract.State{}
+				state.Key = "007"
+				state.Value = []byte("bond")
+				request := &contract.UpdateStateRequest{}
+				request.Context = context
+				request.Collection = collection
+				request.State = state
+				payload, _ = proto.Marshal(request)
+			})
+
+			It("should handle missing context error", func() {
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "UpdateState", payload)
+				Expect(result).To(BeNil())
+				Expect(err).To(MatchError("UpdateState failed: No stub found for transaction context channel1 txn1"))
+			})
+
+			It("should fail if the state does not already exist in a named collection", func() {
+				stub := &fakes.ChaincodeStubInterface{}
+				contextStore.Put("channel1", "txn1", stub)
+
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "UpdateState", payload)
+				Expect(result).To(BeNil())
+				Expect(err).To(MatchError("UpdateState failed for collection private: No state exists for key 007"))
+
+				Expect(stub.GetStateCallCount()).To(Equal(0), "Should not call GetState")
+				Expect(stub.GetPrivateDataCallCount()).To(Equal(1), "Should not call GetPrivateData once")
+				collection, key := stub.GetPrivateDataArgsForCall(0)
+				Expect(collection).To(Equal("private"), "Should call GetPrivateData with correct collection name")
+				Expect(key).To(Equal("007"), "Should call GetState with correct key")
+
+				Expect(stub.PutStateCallCount()).To(Equal(0), "Should not call PutState")
+				Expect(stub.PutPrivateDataCallCount()).To(Equal(0), "Should not call PutPrivateData")
+			})
+
+			It("should update a state which already exists in a named collection", func() {
+				stub := &fakes.ChaincodeStubInterface{}
+				stub.GetPrivateDataReturns([]byte("dr evil"), nil)
+				contextStore.Put("channel1", "txn1", stub)
+
+				Expect(proxy.FabricCall(ctx, "wapc", "LedgerService", "UpdateState", payload)).To(BeNil())
+
+				Expect(stub.GetStateCallCount()).To(Equal(0), "Should not call GetState")
+				Expect(stub.GetPrivateDataCallCount()).To(Equal(1), "Should not call GetPrivateData once")
+				collection, key := stub.GetPrivateDataArgsForCall(0)
+				Expect(collection).To(Equal("private"), "Should call GetPrivateData with correct collection name")
+				Expect(key).To(Equal("007"), "Should call GetState with correct key")
+
+				Expect(stub.PutStateCallCount()).To(Equal(0), "Should not call PutState")
+				Expect(stub.PutPrivateDataCallCount()).To(Equal(1), "Should call PutPrivateData once")
+				collection, key, value := stub.PutPrivateDataArgsForCall(0)
+				Expect(collection).To(Equal("private"), "Should call PutPrivateData with correct collection name")
+				Expect(key).To(Equal("007"), "Should call PutPrivateData with correct key")
+				Expect(value).To(Equal([]byte("bond")), "Should call PutPrivateData with correct value")
 			})
 		})
 
@@ -222,7 +592,8 @@ var _ = Describe("FabricProxy", func() {
 				request.Query = query
 				payload, _ := proto.Marshal(request)
 
-				result, _ := proxy.FabricCall(ctx, "wapc", "LedgerService", "GetStates", payload)
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "GetStates", payload)
+				Expect(err).To(BeNil())
 
 				Expect(stub.GetStateByRangeCallCount()).To(Equal(1), "Should call GetStateByRange once")
 				startKey, endKey := stub.GetStateByRangeArgsForCall(0)
