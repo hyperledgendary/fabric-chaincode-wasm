@@ -4,29 +4,27 @@
 package internal
 
 import (
-	"context"
-	"fmt"
 	"log"
-	"time"
 
 	contract "github.com/hyperledgendary/fabric-ledger-protos-go/contract"
 	"github.com/hyperledger/fabric-chaincode-go/shim"
 	pb "github.com/hyperledger/fabric-protos-go/peer"
-	wapc "github.com/wapc/wapc-go"
+
 	"google.golang.org/protobuf/proto"
 )
 
-// WasmContract holds a pool of waPC instances to run smart contract transactions in
+// WasmContract provides the Init and Invoke functions required by Fabric and
+// represents a smart contract in Wasm.
 type WasmContract struct {
-	contextStore *ContextStore
-	wapcPool     *wapc.Pool
+	contextStore     *ContextStore
+	wasmGuestInvoker WasmGuestInvoker
 }
 
-// NewWasmContract returns a new smart contract to invoke transactions in a waPC instance
-func NewWasmContract(contextStore *ContextStore, wapcPool *wapc.Pool) *WasmContract {
+// NewWasmContract returns a new smart contract to invoke Wasm transactions
+func NewWasmContract(contextStore *ContextStore, invoker WasmGuestInvoker) *WasmContract {
 	contract := WasmContract{}
 	contract.contextStore = contextStore
-	contract.wapcPool = wapcPool
+	contract.wasmGuestInvoker = invoker
 
 	return &contract
 }
@@ -36,7 +34,7 @@ func (wc *WasmContract) Init(APIstub shim.ChaincodeStubInterface) pb.Response {
 	return shim.Success(nil)
 }
 
-// Invoke calls a transaction in the waPC instance
+// Invoke calls a Wasm transaction
 func (wc *WasmContract) Invoke(APIstub shim.ChaincodeStubInterface) pb.Response {
 	result, err := wc.callTransaction(APIstub)
 	if err != nil {
@@ -72,28 +70,18 @@ func (wc *WasmContract) callTransaction(APIstub shim.ChaincodeStubInterface) ([]
 		return nil, err
 	}
 
-	wapcInstance, err := wc.wapcPool.Get(10 * time.Millisecond)
-	if err != nil {
-		log.Printf("[host] error getting waPC instance: %s\n", err)
-		return nil, err
-	}
-	defer func() {
-		err := wc.wapcPool.Return(wapcInstance)
-		if err != nil {
-			log.Printf("[host] error returning waPC instance: %s\n", err)
-		}
-	}()
-
-	ctx := context.Background()
-	result, err := wapcInstance.Invoke(ctx, "InvokeTransaction", args)
+	result, err := wc.wasmGuestInvoker.InvokeWasmOperation("InvokeTransaction", args)
 	if err != nil {
 		log.Printf("[host] error invoking transaction: %s\n", err)
 		return nil, err
 	}
 
-	log.Printf("[host] success result=%s\n", string(result))
-	fmt.Println(string(result))
-	return result, nil
+	response := &contract.InvokeTransactionResponse{}
+	err = proto.Unmarshal(result, response)
+	responsePayload := response.GetPayload()
+
+	log.Printf("[host] success result=%s\n", string(responsePayload))
+	return responsePayload, nil
 }
 
 func createInvokeTransactionArgs(channelID string, txID string, fnname string, params []string) ([]byte, error) {

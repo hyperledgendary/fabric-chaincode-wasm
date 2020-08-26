@@ -36,58 +36,34 @@ func (proxy *FabricProxy) FabricCall(ctx context.Context, binding, namespace, op
 		switch operation {
 		case "CreateState":
 			log.Printf("[host] Processing CreateStateRequest...\n")
-			request := &contract.CreateStateRequest{}
-			err := proto.Unmarshal(payload, request)
-			if err != nil {
-				return nil, err
-			}
-
-			return proxy.createState(request)
+			return proxy.createState(payload)
 		case "ReadState":
 			log.Printf("[host] Processing ReadStateRequest...\n")
-			request := &contract.ReadStateRequest{}
-			err := proto.Unmarshal(payload, request)
-			if err != nil {
-				return nil, err
-			}
-
-			return proxy.readState(request)
+			return proxy.readState(payload)
 		case "ExistsState":
 			log.Printf("[host] Processing ExistsStateRequest...\n")
-			request := &contract.ExistsStateRequest{}
-			err := proto.Unmarshal(payload, request)
-			if err != nil {
-				return nil, err
-			}
-
-			return proxy.existsState(request)
+			return proxy.existsState(payload)
 		case "UpdateState":
 			log.Printf("[host] Processing UpdateStateRequest...\n")
-			request := &contract.UpdateStateRequest{}
-			err := proto.Unmarshal(payload, request)
-			if err != nil {
-				return nil, err
-			}
-
-			return proxy.updateState(request)
+			return proxy.updateState(payload)
 		case "GetStates":
 			log.Printf("[host] Processing GetStatesRequest...\n")
-			request := &contract.GetStatesRequest{}
-			err := proto.Unmarshal(payload, request)
-			if err != nil {
-				return nil, err
-			}
-
-			return proxy.getStates(request)
+			return proxy.getStates(payload)
 		}
 	}
 
 	return nil, fmt.Errorf("Operation not supported: %s %s %s", binding, namespace, operation)
 }
 
-func (proxy *FabricProxy) createState(request *contract.CreateStateRequest) ([]byte, error) {
-	context := request.Context
-	state := request.State
+func (proxy *FabricProxy) createState(payload []byte) ([]byte, error) {
+	request := &contract.CreateStateRequest{}
+	err := proto.Unmarshal(payload, request)
+	if err != nil {
+		return nil, err
+	}
+
+	context := request.GetContext()
+	state := request.GetState()
 	log.Printf("[host] CreateState txid %s chid %s key %s value length %d\n", context.TransactionId, context.ChannelId, state.Key, len(state.Value))
 
 	stub, err := proxy.contextStore.Get(context)
@@ -110,12 +86,18 @@ func (proxy *FabricProxy) createState(request *contract.CreateStateRequest) ([]b
 	}
 
 	log.Printf("[host] CreateState done")
-	return nil, err
+	return nil, nil
 }
 
-func (proxy *FabricProxy) updateState(request *contract.UpdateStateRequest) ([]byte, error) {
-	context := request.Context
-	state := request.State
+func (proxy *FabricProxy) updateState(payload []byte) ([]byte, error) {
+	request := &contract.UpdateStateRequest{}
+	err := proto.Unmarshal(payload, request)
+	if err != nil {
+		return nil, err
+	}
+
+	context := request.GetContext()
+	state := request.GetState()
 	log.Printf("[host] UpdateState txid %s chid %s key %s value length %d\n", context.TransactionId, context.ChannelId, state.Key, len(state.Value))
 
 	stub, err := proxy.contextStore.Get(context)
@@ -138,11 +120,18 @@ func (proxy *FabricProxy) updateState(request *contract.UpdateStateRequest) ([]b
 	}
 
 	log.Printf("[host] UpdateState done")
-	return nil, err
+	return nil, nil
 }
 
-func (proxy *FabricProxy) readState(request *contract.ReadStateRequest) ([]byte, error) {
-	context := request.Context
+func (proxy *FabricProxy) readState(payload []byte) ([]byte, error) {
+	request := &contract.ReadStateRequest{}
+	err := proto.Unmarshal(payload, request)
+	if err != nil {
+		return nil, err
+	}
+
+	context := request.GetContext()
+	stateKey := request.GetStateKey()
 	log.Printf("[host] ReadState txid %s chid %s key %s\n", context.TransactionId, context.ChannelId, request.StateKey)
 
 	stub, err := proxy.contextStore.Get(context)
@@ -153,7 +142,7 @@ func (proxy *FabricProxy) readState(request *contract.ReadStateRequest) ([]byte,
 	response := &contract.ReadStateResponse{}
 	state := &contract.State{}
 	log.Printf("ReadState done")
-	stateBytes, err := stub.GetState(request.StateKey)
+	stateBytes, err := stub.GetState(stateKey)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to read from world state. %s", err.Error())
 	}
@@ -166,8 +155,15 @@ func (proxy *FabricProxy) readState(request *contract.ReadStateRequest) ([]byte,
 	return proto.Marshal(response)
 }
 
-func (proxy *FabricProxy) existsState(request *contract.ExistsStateRequest) ([]byte, error) {
-	context := request.Context
+func (proxy *FabricProxy) existsState(payload []byte) ([]byte, error) {
+	request := &contract.ExistsStateRequest{}
+	err := proto.Unmarshal(payload, request)
+	if err != nil {
+		return nil, err
+	}
+
+	context := request.GetContext()
+	stateKey := request.GetStateKey()
 	log.Printf("[host] ExistsState txid %s chid %s key %s\n", context.TransactionId, context.ChannelId, request.StateKey)
 
 	stub, err := proxy.contextStore.Get(context)
@@ -175,7 +171,7 @@ func (proxy *FabricProxy) existsState(request *contract.ExistsStateRequest) ([]b
 		return nil, fmt.Errorf("Failed to read from world state. %s", err.Error())
 	}
 
-	stateBytes, err := stub.GetState(request.StateKey)
+	stateBytes, err := stub.GetState(stateKey)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to read from world state. %s", err.Error())
 	}
@@ -192,8 +188,14 @@ func (proxy *FabricProxy) existsState(request *contract.ExistsStateRequest) ([]b
 	return proto.Marshal(response)
 }
 
-func (proxy *FabricProxy) getStates(request *contract.GetStatesRequest) ([]byte, error) {
-	context := request.Context
+func (proxy *FabricProxy) getStates(payload []byte) ([]byte, error) {
+	request := &contract.GetStatesRequest{}
+	err := proto.Unmarshal(payload, request)
+	if err != nil {
+		return nil, err
+	}
+
+	context := request.GetContext()
 	log.Printf("[host] GetStates txid %s chid %s\n", context.TransactionId, context.ChannelId)
 
 	stub, err := proxy.contextStore.Get(context)
