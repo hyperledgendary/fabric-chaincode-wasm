@@ -5,13 +5,11 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 
 	"github.com/hyperledgendary/fabric-chaincode-wasm/internal"
 	"github.com/hyperledger/fabric-chaincode-go/shim"
-	wapc "github.com/wapc/wapc-go"
 )
 
 // ChaincodeConfig is used to configure the chaincode server. See chaincode.env.example
@@ -19,33 +17,6 @@ type ChaincodeConfig struct {
 	CCID    string
 	Address string
 	WasmCC  string
-}
-
-func consoleLog(msg string) {
-	fmt.Println(msg)
-}
-
-func newChaincodePool(wasmFile string, proxy *internal.FabricProxy) (*wapc.Pool, error) {
-	wasmBytes, err := ioutil.ReadFile(wasmFile)
-	if err != nil {
-		return nil, err
-	}
-
-	module, err := wapc.New(consoleLog, wasmBytes, proxy.FabricCall)
-	if err != nil {
-		return nil, err
-	}
-	// TODO when should this be closed?
-	// defer module.Close()
-
-	wapcPool, err := wapc.NewPool(module, 10)
-	if err != nil {
-		return nil, err
-	}
-	// TODO when should this be closed?
-	// defer wapcPool.Close()
-
-	return wapcPool, nil
 }
 
 func main() {
@@ -63,12 +34,13 @@ func main() {
 	contextStore := internal.NewContextStore()
 	proxy := internal.NewFabricProxy(contextStore)
 
-	wapcPool, err := newChaincodePool(config.WasmCC, proxy)
+	wasmGuest, err := internal.NewWasmGuest(config.WasmCC, proxy)
 	if err != nil {
 		panic(err)
 	}
+	defer wasmGuest.Close()
 
-	contract := internal.NewWasmContract(contextStore, wapcPool)
+	contract := internal.NewWasmContract(contextStore, wasmGuest)
 
 	if len(config.Address) > 0 {
 		log.Printf("[host] Wasm Chaincode server starting...\n")
