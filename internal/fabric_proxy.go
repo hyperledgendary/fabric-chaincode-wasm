@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"runtime/debug"
 
 	contract "github.com/hyperledgendary/fabric-ledger-protos-go/contract"
 	"github.com/hyperledger/fabric-chaincode-go/shim"
@@ -27,10 +28,20 @@ func NewFabricProxy(contextStore *ContextStore) *FabricProxy {
 }
 
 // FabricCall is the waPC HostCall function for interacting with the ledger
-func (proxy *FabricProxy) FabricCall(ctx context.Context, binding, namespace, operation string, payload []byte) ([]byte, error) {
+func (proxy *FabricProxy) FabricCall(ctx context.Context, binding, namespace, operation string, payload []byte) (result []byte, err error) {
 	// Route the payload to any custom functionality accordingly.
 	// You can even route to other waPC modules!!!
 	log.Printf("[host] bd %s ns %s op %s payload length %d\n", binding, namespace, operation, len(payload))
+
+	// Need to recover from any panics in FabricCall otherwise the chaincode
+	// exits and, since this is being called by the Wasm guest code which was
+	// itself called by the Wasm host, it's difficult to work out why
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[host] Recovering from panic in FabricCall: %v \nStack: %s \n", r, string(debug.Stack()))
+			err = fmt.Errorf("Operation panicked: %s %s %s", binding, namespace, operation)
+		}
+	}()
 
 	if binding == "wapc" && namespace == "LedgerService" {
 		switch operation {

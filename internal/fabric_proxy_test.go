@@ -31,6 +31,14 @@ var _ = Describe("FabricProxy", func() {
 
 	Describe("FabricCall", func() {
 
+		Context("When something panics", func() {
+			It("should recover and return an error", func() {
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "CreateState", nil)
+				Expect(result).To(BeNil())
+				Expect(err).To(MatchError("Operation panicked: wapc LedgerService CreateState"))
+			})
+		})
+
 		Context("With an invalid request", func() {
 			It("should error if the binding is not wapc", func() {
 				result, err := proxy.FabricCall(ctx, "notWapc", "LedgerService", "CreateState", []byte(""))
