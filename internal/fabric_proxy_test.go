@@ -539,6 +539,92 @@ var _ = Describe("FabricProxy", func() {
 			})
 		})
 
+		Context("With a world state GetHash request", func() {
+			var payload []byte
+
+			BeforeEach(func() {
+				context := &contract.TransactionContext{}
+				context.ChannelId = "channel1"
+				context.TransactionId = "txn1"
+				request := &contract.GetHashRequest{}
+				request.Context = context
+				request.StateKey = "007"
+				payload, _ = proto.Marshal(request)
+			})
+
+			It("should handle missing context error", func() {
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "GetHash", payload)
+				Expect(result).To(BeNil())
+				Expect(err).To(MatchError("GetHash failed: No stub found for transaction context channel1 txn1"))
+			})
+
+			It("should fail with an operation not supported error", func() {
+				stub := &fakes.ChaincodeStubInterface{}
+				contextStore.Put("channel1", "txn1", stub)
+
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "GetHash", payload)
+				Expect(result).To(BeNil())
+				Expect(err).To(MatchError("GetHash failed: Operation not supported for world state"))
+			})
+		})
+
+		Context("With a named collection GetHash request", func() {
+			var payload []byte
+
+			BeforeEach(func() {
+				context := &contract.TransactionContext{}
+				context.ChannelId = "channel1"
+				context.TransactionId = "txn1"
+				collection := &contract.Collection{}
+				collection.Name = "private"
+				request := &contract.GetHashRequest{}
+				request.Context = context
+				request.Collection = collection
+				request.StateKey = "007"
+				payload, _ = proto.Marshal(request)
+			})
+
+			It("should handle missing context error", func() {
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "GetHash", payload)
+				Expect(result).To(BeNil())
+				Expect(err).To(MatchError("GetHash failed: No stub found for transaction context channel1 txn1"))
+			})
+
+			It("should fail if the state key does not exist in a named collection", func() {
+				stub := &fakes.ChaincodeStubInterface{}
+				contextStore.Put("channel1", "txn1", stub)
+				stub.GetPrivateDataHashReturns(nil, nil)
+
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "GetHash", payload)
+				Expect(result).To(BeNil())
+				Expect(err).To(MatchError("GetHash failed for collection private: State 007 does not exist"))
+
+				Expect(stub.GetPrivateDataHashCallCount()).To(Equal(1), "Should call GetPrivateDataHash once")
+				collection, key := stub.GetPrivateDataHashArgsForCall(0)
+				Expect(collection).To(Equal("private"), "Should call GetPrivateDataHash with correct collection name")
+				Expect(key).To(Equal("007"), "Should call GetPrivateDataHash with correct key")
+			})
+
+			It("should return the correct value if the state key does exist in a named collection", func() {
+				stub := &fakes.ChaincodeStubInterface{}
+				contextStore.Put("channel1", "txn1", stub)
+				stub.GetPrivateDataHashReturns([]byte("da39a3ee5e6b4b0d3255bfef95601890afd80709"), nil)
+
+				result, err := proxy.FabricCall(ctx, "wapc", "LedgerService", "GetHash", payload)
+				Expect(err).To(BeNil())
+
+				Expect(stub.GetPrivateDataHashCallCount()).To(Equal(1), "Should call GetPrivateDataHash once")
+				collection, key := stub.GetPrivateDataHashArgsForCall(0)
+				Expect(collection).To(Equal("private"), "Should call GetPrivateDataHash with correct collection name")
+				Expect(key).To(Equal("007"), "Should call GetPrivateDataHash with correct key")
+
+				response := &contract.GetHashResponse{}
+				_ = proto.Unmarshal(result, response)
+				hash := response.GetHash()
+				Expect(hash).To(Equal([]byte("da39a3ee5e6b4b0d3255bfef95601890afd80709")))
+			})
+		})
+
 		Context("With a GetStatesRequest_ByKeyRange request", func() {
 			var (
 				request *contract.GetStatesRequest

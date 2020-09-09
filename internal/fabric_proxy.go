@@ -57,6 +57,9 @@ func (proxy *FabricProxy) FabricCall(ctx context.Context, binding, namespace, op
 		case "UpdateState":
 			log.Printf("[host] Processing UpdateStateRequest...\n")
 			return proxy.updateState(payload)
+		case "GetHash":
+			log.Printf("[host] Processing GetHash...\n")
+			return proxy.getHash(payload)
 		case "GetStates":
 			log.Printf("[host] Processing GetStatesRequest...\n")
 			return proxy.getStates(payload)
@@ -266,6 +269,47 @@ func (proxy *FabricProxy) existsState(payload []byte) ([]byte, error) {
 	}
 
 	log.Printf("[host] Exists State done")
+	return proto.Marshal(response)
+}
+
+func (proxy *FabricProxy) getHash(payload []byte) ([]byte, error) {
+	request := &contract.GetHashRequest{}
+	err := proto.Unmarshal(payload, request)
+	if err != nil {
+		return nil, err
+	}
+
+	context := request.GetContext()
+	stateKey := request.GetStateKey()
+	log.Printf("[host] GetHash txid %s chid %s key %s\n", context.TransactionId, context.ChannelId, request.StateKey)
+
+	stub, err := proxy.contextStore.Get(context)
+	if err != nil {
+		return nil, fmt.Errorf("GetHash failed: %s", err.Error())
+	}
+
+	response := &contract.GetHashResponse{}
+
+	var hashBytes []byte
+	collection := request.GetCollection()
+	if collection != nil || collection.GetName() != "" {
+		collectionName := collection.GetName()
+
+		hashBytes, err = stub.GetPrivateDataHash(collectionName, stateKey)
+		if err != nil {
+			return nil, fmt.Errorf("GetHash failed for collection %s: %s", collectionName, err.Error())
+		}
+
+		if hashBytes == nil {
+			return nil, fmt.Errorf("GetHash failed for collection %s: State %s does not exist", collectionName, stateKey)
+		}
+	} else {
+		return nil, fmt.Errorf("GetHash failed: Operation not supported for world state")
+	}
+
+	response.Hash = hashBytes
+
+	log.Printf("[host] GetHash done\n")
 	return proto.Marshal(response)
 }
 
