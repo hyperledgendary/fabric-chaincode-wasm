@@ -1,12 +1,14 @@
 # Smart Contracts - running in Wasm
 
+[![Build Status](https://dev.azure.com/hyperledgendary/Wasm/_apis/build/status/hyperledgendary.fabric-chaincode-wasm?branchName=master)](https://dev.azure.com/hyperledgendary/Wasm/_build/latest?definitionId=2&branchName=master)
+
 Web Assembly (Wasm) is "a new code format for deploying programs that is portable, safe, efficient, and universal.”
 
 This repo provides the PoC for a writing a smart contract runs inside a Wasm engine. This Wasm engine is hosted by a golang chaincode that implements the gRPC to talk back to the peer, and route calls to the guest code in the Wasm engine.
 
 ## Usage
 
-This is an early prototype for running Wasm chaincode as an external service using the [Life](https://github.com/perlin-network/life) WebAssembly VM.
+This is an early prototype for running Wasm chaincode as an external service using the [waPC Go Host](https://github.com/wapc/wapc-go).
 
 It can be used with the [fabric-builders](https://github.com/hyperledgendary/fabric-builders) builder project. The instructions below assume that you have a Fabric network configured to use `hyperledgendary/fabric-builder-peer` images. See the "Chaincode as an external service" documentation for more information.
 
