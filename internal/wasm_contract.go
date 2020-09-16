@@ -62,9 +62,15 @@ func (wc *WasmContract) callTransaction(APIstub shim.ChaincodeStubInterface) ([]
 
 	function, params := APIstub.GetFunctionAndParameters()
 
+	transientMap, err := APIstub.GetTransient()
+	if err != nil {
+		log.Printf("[host] error creating invoke transaction request message: %s\n", err)
+		return nil, err
+	}
+
 	log.Printf("[host] calling %s with context chid %s txid %s\n", function, channelID, txID)
 
-	args, err := createInvokeTransactionArgs(channelID, txID, function, params)
+	args, err := createInvokeTransactionArgs(channelID, txID, function, params, transientMap)
 	if err != nil {
 		log.Printf("[host] error creating invoke transaction request message: %s\n", err)
 		return nil, err
@@ -84,7 +90,7 @@ func (wc *WasmContract) callTransaction(APIstub shim.ChaincodeStubInterface) ([]
 	return responsePayload, nil
 }
 
-func createInvokeTransactionArgs(channelID string, txID string, fnname string, params []string) ([]byte, error) {
+func createInvokeTransactionArgs(channelID string, txID string, fnname string, params []string, transientMap map[string][]byte) ([]byte, error) {
 	args := make([][]byte, len(params))
 	for i, p := range params {
 		args[i] = []byte(p)
@@ -97,7 +103,9 @@ func createInvokeTransactionArgs(channelID string, txID string, fnname string, p
 	msg := &contract.InvokeTransactionRequest{
 		Context:         context,
 		TransactionName: fnname,
-		Args:            args}
+		Args:            args,
+		TransientArgs:   transientMap,
+	}
 
 	argsBuffer, err := proto.Marshal(msg)
 	if err != nil {

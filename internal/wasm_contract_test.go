@@ -47,5 +47,36 @@ var _ = Describe("WasmContract", func() {
 				Expect(result.Payload).To(Equal([]byte("bond")))
 			})
 		})
+
+		Context("With transient data", func() {
+			var stub *fakes.ChaincodeStubInterface
+
+			BeforeEach(func() {
+				stub = &fakes.ChaincodeStubInterface{}
+
+				transientData := map[string][]byte{
+					"pin": []byte("0000"),
+					"ssn": []byte("0123456789"),
+				}
+				stub.GetTransientReturns(transientData, nil)
+			})
+
+			It("should include the transient data in the InvokeTransactionRequest message", func() {
+				result := wasmContract.Invoke(stub)
+
+				Expect(result.Status).To(Equal(int32(200)))
+
+				operation, args := wasmInvoker.InvokeWasmOperationArgsForCall(0)
+				Expect(operation).To(Equal("InvokeTransaction"))
+				Expect(args).NotTo(BeNil())
+
+				itr := &contract.InvokeTransactionRequest{}
+				_ = proto.Unmarshal(args, itr)
+				transientData := itr.GetTransientArgs()
+				Expect(transientData).To(HaveLen(2))
+				Expect(transientData).To(HaveKeyWithValue("pin", []byte("0000")))
+				Expect(transientData).To(HaveKeyWithValue("ssn", []byte("0123456789")))
+			})
+		})
 	})
 })
