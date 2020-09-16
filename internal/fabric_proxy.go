@@ -87,7 +87,7 @@ func (proxy *FabricProxy) createState(payload []byte) ([]byte, error) {
 	}
 
 	collection := request.GetCollection()
-	if collection != nil || collection.GetName() != "" {
+	if collection != nil && collection.GetName() != "" {
 		collectionName := collection.GetName()
 
 		stateBytes, err := stub.GetPrivateData(collectionName, stateKey)
@@ -141,7 +141,7 @@ func (proxy *FabricProxy) updateState(payload []byte) ([]byte, error) {
 	}
 
 	collection := request.GetCollection()
-	if collection != nil || collection.GetName() != "" {
+	if collection != nil && collection.GetName() != "" {
 		collectionName := collection.GetName()
 
 		stateBytes, err := stub.GetPrivateData(collectionName, stateKey)
@@ -198,7 +198,7 @@ func (proxy *FabricProxy) readState(payload []byte) ([]byte, error) {
 
 	var stateBytes []byte
 	collection := request.GetCollection()
-	if collection != nil || collection.GetName() != "" {
+	if collection != nil && collection.GetName() != "" {
 		collectionName := collection.GetName()
 
 		stateBytes, err = stub.GetPrivateData(collectionName, stateKey)
@@ -246,7 +246,7 @@ func (proxy *FabricProxy) existsState(payload []byte) ([]byte, error) {
 
 	var stateBytes []byte
 	collection := request.GetCollection()
-	if collection != nil || collection.GetName() != "" {
+	if collection != nil && collection.GetName() != "" {
 		collectionName := collection.GetName()
 
 		stateBytes, err = stub.GetPrivateData(collectionName, stateKey)
@@ -292,7 +292,7 @@ func (proxy *FabricProxy) getHash(payload []byte) ([]byte, error) {
 
 	var hashBytes []byte
 	collection := request.GetCollection()
-	if collection != nil || collection.GetName() != "" {
+	if collection != nil && collection.GetName() != "" {
 		collectionName := collection.GetName()
 
 		hashBytes, err = stub.GetPrivateDataHash(collectionName, stateKey)
